@@ -20,7 +20,7 @@ public enum ActionType
     TypeText,
     /// <summary>Parameter: program path, file, folder, or URL. Optional arguments after '|'.</summary>
     Open,
-    /// <summary>Parameter: milliseconds to wait.</summary>
+    /// <summary>Parameter: seconds to wait, decimals allowed (e.g. "1.5").</summary>
     Wait,
 }
 
@@ -30,7 +30,47 @@ public class ActionStep : ObservableObject
     private string _parameter = "";
     private int _repeat = 1;
 
-    public ActionType Type { get => _type; set => Set(ref _type, value); }
+    /// <summary>Human-friendly names for the action dropdown.</summary>
+    public static readonly IReadOnlyDictionary<ActionType, string> Labels = new Dictionary<ActionType, string>
+    {
+        [ActionType.MediaPlayPause] = "Play / Pause",
+        [ActionType.MediaNext] = "Next track",
+        [ActionType.MediaPrevious] = "Previous track",
+        [ActionType.MediaStop] = "Stop media",
+        [ActionType.VolumeUp] = "Volume up",
+        [ActionType.VolumeDown] = "Volume down",
+        [ActionType.VolumeMute] = "Mute / Unmute",
+        [ActionType.KeyCombo] = "Press keys",
+        [ActionType.TypeText] = "Type text",
+        [ActionType.Open] = "Open app / file / URL",
+        [ActionType.Wait] = "Wait",
+    };
+
+    public ActionType Type
+    {
+        get => _type;
+        set
+        {
+            if (!Set(ref _type, value)) return;
+            OnPropertyChanged(nameof(NeedsParameter));
+            OnPropertyChanged(nameof(ParameterHint));
+        }
+    }
+
+    /// <summary>Media and volume steps ignore the parameter, so the UI disables that box for them.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool NeedsParameter => Type is ActionType.KeyCombo or ActionType.TypeText or ActionType.Open or ActionType.Wait;
+
+    /// <summary>Placeholder shown in the empty parameter box.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ParameterHint => Type switch
+    {
+        ActionType.KeyCombo => "e.g. ctrl+shift+esc, alt+tab, win+d",
+        ActionType.TypeText => "Text to type",
+        ActionType.Open => "e.g. https://youtube.com, notepad.exe, spotify:",
+        ActionType.Wait => "Seconds, e.g. 1.5",
+        _ => "No parameter needed",
+    };
 
     public string Parameter { get => _parameter; set => Set(ref _parameter, value ?? ""); }
 

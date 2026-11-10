@@ -35,9 +35,20 @@ public static class ActionExecutor
             case ActionType.TypeText: TypeText(step.Parameter); break;
             case ActionType.Open: Open(step.Parameter); break;
             case ActionType.Wait:
-                if (int.TryParse(step.Parameter, out var ms)) await Task.Delay(Math.Clamp(ms, 0, 60_000));
+                await Task.Delay(TimeSpan.FromSeconds(ParseSeconds(step.Parameter)));
                 break;
         }
+    }
+
+    /// <summary>Wait parameter in seconds; accepts "2", "1.5" or "1,5". Capped at 10 minutes.</summary>
+    public static double ParseSeconds(string text)
+    {
+        var normalized = text.Trim().Replace(',', '.');
+        if (normalized.Length == 0) return 0; // empty = no wait (matches old behaviour)
+        if (!double.TryParse(normalized, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var seconds) || double.IsNaN(seconds))
+            throw new ArgumentException($"Wait needs a number of seconds, e.g. 1.5 (got \"{text}\").");
+        return Math.Clamp(seconds, 0, 600);
     }
 
     private static void Open(string target)

@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Shmoice.Models;
 using Shmoice.Services;
@@ -41,7 +43,6 @@ public partial class MainWindow : Window
     {
         try
         {
-            CommitEdits();
             _listener.Start(EnabledPhrases(), _data.Settings.WakeWord, _data.Settings.ConfidenceThreshold);
             SetStatus(true);
             var wake = string.IsNullOrWhiteSpace(_data.Settings.WakeWord) ? "" : $" (say \"{_data.Settings.WakeWord.Trim()}\" first)";
@@ -103,48 +104,169 @@ public partial class MainWindow : Window
     private void AddCommand_Click(object sender, RoutedEventArgs e)
     {
         var command = new VoiceCommand { Phrase = "new command", Steps = { new ActionStep() } };
-        _data.Commands.Add(command);
+        _data.Commands.Insert(0, command); // newest first
         CommandList.SelectedItem = command;
+        CommandList.ScrollIntoView(command);
     }
 
     private void DeleteCommand_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not { } command) return;
-        if (MessageBox.Show($"Delete \"{command.Phrase}\"?", "Shmoice", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (Selected is { } command) DeleteCommand(command);
+    }
+
+    private void CommandList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && Selected is { } command)
+        {
+            DeleteCommand(command);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F2 && Selected is { } toRename)
+        {
+            Rename(toRename);
+            e.Handled = true;
+        }
+    }
+
+    private void DeleteCommand(VoiceCommand command)
+    {
+        if (_data.Settings.ConfirmDelete)
+        {
+            var steps = command.Steps.Count == 1 ? "1 step" : $"{command.Steps.Count} steps";
+            var confirmed = ConfirmDialog.Ask(this, "Delete this command?",
+                $"“{command.Phrase}” and its {steps} will be removed. This can't be undone.",
+                "Delete", out var dontAskAgain);
+            if (!confirmed) return;
+            if (dontAskAgain) _data.Settings.ConfirmDelete = false;
+        }
+
+        var index = _data.Commands.IndexOf(command);
         _data.Commands.Remove(command);
+        // Keep a selection so the editor doesn't go blank: pick the item that took its place.
+        if (_data.Commands.Count > 0)
+            CommandList.SelectedIndex = Math.Min(index, _data.Commands.Count - 1);
+        SaveAll();
+        Log($"Deleted \"{command.Phrase}\"");
+    }
+
+    private void Rename(VoiceCommand command)
+    {
+        MainTabs.SelectedIndex = 0;
+        CommandList.SelectedItem = command;
+        // Wait for the editor to bind to the newly selected command before focusing.
+        Dispatcher.BeginInvoke(() => { PhraseBox.Focus(); PhraseBox.SelectAll(); },
+            System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    // ---- Right-click menu -------------------------------------------------------------
+
+    /// <summary>Select the item being right-clicked so the editor shows what the menu acts on.</summary>
+    private void CommandItem_RightMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListBoxItem item) item.IsSelected = true;
+    }
+
+    private void CommandMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        // "Ask before deleting" is an app setting, not part of the command, so set it when the menu opens.
+        if (sender is ContextMenu menu)
+            foreach (var item in menu.Items.OfType<MenuItem>().Where(i => Equals(i.Tag, "AskBeforeDelete")))
+                item.IsChecked = _data.Settings.ConfirmDelete;
+    }
+
+    private static VoiceCommand? MenuTarget(object sender) => (sender as FrameworkElement)?.DataContext as VoiceCommand;
+
+    private async void MenuTest_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is not { } command) return;
+        Log($"Testing \"{command.Phrase}\"");
+        await Run(command);
+    }
+
+    private void MenuRename_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is { } command) Rename(command);
+    }
+
+    private void MenuDuplicate_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is not { } original) return;
+        var copy = new VoiceCommand { Phrase = original.Phrase + " copy", Enabled = original.Enabled };
+        foreach (var s in original.Steps)
+            copy.Steps.Add(new ActionStep { Type = s.Type, Parameter = s.Parameter, Repeat = s.Repeat });
+        _data.Commands.Insert(_data.Commands.IndexOf(original), copy); // just above the original
+        SaveAll();
+        Rename(copy); // a duplicate almost always needs a new phrase
+        Log($"Duplicated \"{original.Phrase}\"");
+    }
+
+    private void MenuMoveTop_Click(object sender, RoutedEventArgs e) => MoveCommand(MenuTarget(sender), 0);
+
+    private void MenuMoveBottom_Click(object sender, RoutedEventArgs e) => MoveCommand(MenuTarget(sender), _data.Commands.Count - 1);
+
+    private void MoveCommand(VoiceCommand? command, int newIndex)
+    {
+        if (command == null) return;
+        var index = _data.Commands.IndexOf(command);
+        if (index < 0 || index == newIndex) return;
+        _data.Commands.Move(index, newIndex);
+        CommandList.SelectedItem = command;
+        CommandList.ScrollIntoView(command);
         SaveAll();
     }
 
-    private void AddStep_Click(object sender, RoutedEventArgs e)
+    private void MenuAskBeforeDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not { } command) return;
-        var step = new ActionStep();
-        command.Steps.Add(step);
-        StepsGrid.SelectedItem = step;
+        if (sender is not MenuItem item) return;
+        _data.Settings.ConfirmDelete = item.IsChecked;
+        SaveAll();
+    }
+
+    private void MenuDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (MenuTarget(sender) is { } command) DeleteCommand(command);
+    }
+
+    /// <summary>The dashed "Add a step" row; its DataContext is the command it belongs to (saved command or AI draft).</summary>
+    private void AddStepInline_Click(object sender, RoutedEventArgs e) =>
+        ((sender as FrameworkElement)?.DataContext as VoiceCommand)?.Steps.Add(new ActionStep());
+
+    // The per-row buttons below are shared by the Commands editor and the AI preview.
+    // Each button's DataContext is its step; find whichever command owns it.
+
+    private (ActionStep step, System.Collections.ObjectModel.ObservableCollection<ActionStep> owner)? StepFrom(object sender)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not ActionStep step) return null;
+        foreach (var steps in new[] { Selected?.Steps, _draft?.Steps })
+            if (steps != null && steps.Contains(step)) return (step, steps);
+        return null;
     }
 
     private void RemoveStep_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is { } command && StepsGrid.SelectedItem is ActionStep step)
-        {
-            CommitEdits();
-            command.Steps.Remove(step);
-        }
+        if (StepFrom(sender) is var (step, owner)) owner.Remove(step);
     }
 
     private void MoveStepUp_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected is not { } command || StepsGrid.SelectedItem is not ActionStep step) return;
-        CommitEdits();
-        var index = command.Steps.IndexOf(step);
-        if (index > 0) command.Steps.Move(index, index - 1);
-        StepsGrid.SelectedItem = step;
+        if (StepFrom(sender) is not var (step, owner)) return;
+        var index = owner.IndexOf(step);
+        if (index > 0) owner.Move(index, index - 1);
+    }
+
+    private void RepeatUp_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ActionStep step) step.Repeat++;
+    }
+
+    private void RepeatDown_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ActionStep step) step.Repeat--;
     }
 
     private async void TestCommand_Click(object sender, RoutedEventArgs e)
     {
         if (Selected is not { } command) return;
-        CommitEdits();
         Log($"Testing \"{command.Phrase}\"");
         await Run(command);
     }
@@ -153,7 +275,6 @@ public partial class MainWindow : Window
 
     private void SaveAll()
     {
-        CommitEdits();
         try
         {
             CommandStore.Save(_data);
@@ -164,12 +285,6 @@ public partial class MainWindow : Window
         {
             Log("Save failed: " + ex.Message);
         }
-    }
-
-    /// <summary>Pushes any in-progress DataGrid cell edit into the model.</summary>
-    private void CommitEdits()
-    {
-        StepsGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
     }
 
     private void CommandList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
@@ -275,7 +390,6 @@ public partial class MainWindow : Window
     private async void AiTest_Click(object sender, RoutedEventArgs e)
     {
         if (_draft == null) return;
-        AiStepsGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
         Log($"Testing AI suggestion \"{_draft.Phrase}\"");
         await Run(_draft);
     }
@@ -285,7 +399,6 @@ public partial class MainWindow : Window
     private void AiAdd_Click(object sender, RoutedEventArgs e)
     {
         if (_draft == null) return;
-        AiStepsGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
         if (string.IsNullOrWhiteSpace(_draft.Phrase)) { AiStatus.Text = "Give the command a phrase first."; return; }
         if (_draft.Steps.Count == 0) { AiStatus.Text = "This suggestion has no steps to save."; return; }
 
@@ -293,10 +406,11 @@ public partial class MainWindow : Window
         ClearDraft();
         AiPrompt.Clear();
         AiStatus.Text = "";
-        _data.Commands.Add(command);
+        _data.Commands.Insert(0, command); // newest first
         SaveAll();
         MainTabs.SelectedIndex = 0;
         CommandList.SelectedItem = command;
+        CommandList.ScrollIntoView(command);
         Log($"Added \"{command.Phrase}\" from AI Builder");
     }
 
@@ -310,7 +424,6 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        CommitEdits();
         try { CommandStore.Save(_data); } catch { /* don't block closing */ }
         _listener.Dispose();
         base.OnClosing(e);

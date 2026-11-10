@@ -33,7 +33,7 @@ public static class AiCommandBuilder
         - KeyCombo: a keyboard shortcut sent to the focused window. Keys joined by "+", e.g. "ctrl+shift+esc", "alt+tab", "win+d", "ctrl+t", "f5". Modifier names: ctrl, alt, shift, win. Other keys use .NET Key names (A-Z, 0-9, F1-F24, Enter, Escape, Tab, Space, Delete, Back, Home, End, PageUp, PageDown, Left, Right, Up, Down).
         - TypeText: types the given text into the focused window.
         - Open: opens a program, file, folder, or URL via the Windows shell. Optional command-line arguments go after a "|", e.g. "notepad.exe" or "chrome.exe|--incognito https://example.com". Prefer URI schemes and well-known executables (e.g. "spotify:", "ms-settings:display", "calc.exe", "https://...") over guessed install paths.
-        - Wait: pauses; parameter is milliseconds as a string, e.g. "1500". Add a Wait after Open when later steps need the opened window to be ready.
+        - Wait: pauses; parameter is the number of seconds as a string, decimals allowed, e.g. "1.5". Add a Wait after Open when later steps need the opened window to be ready.
 
         "repeat" is how many times to run the step (1-100); use 1 unless repetition is the point.
 

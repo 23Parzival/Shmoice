@@ -22,7 +22,9 @@ public static class CommandStore
         if (!File.Exists(FilePath)) return CreateDefaults();
         try
         {
-            return JsonSerializer.Deserialize<AppData>(File.ReadAllText(FilePath), Options) ?? CreateDefaults();
+            var data = JsonSerializer.Deserialize<AppData>(File.ReadAllText(FilePath), Options) ?? CreateDefaults();
+            Upgrade(data);
+            return data;
         }
         catch (JsonException)
         {
@@ -40,6 +42,20 @@ public static class CommandStore
         File.Move(tmp, FilePath, overwrite: true);
     }
 
+    /// <summary>Brings files saved by older versions up to the current format. Saved on the next Save.</summary>
+    private static void Upgrade(AppData data)
+    {
+        if (data.Version < 2)
+        {
+            // Wait used to be milliseconds; it's now seconds. "1500" -> "1.5".
+            foreach (var step in data.Commands.SelectMany(c => c.Steps).Where(s => s.Type == ActionType.Wait))
+                if (double.TryParse(step.Parameter, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var ms))
+                    step.Parameter = (ms / 1000).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        data.Version = AppData.CurrentVersion;
+    }
+
     private static AppData CreateDefaults()
     {
         static VoiceCommand Cmd(string phrase, ActionType type, int repeat = 1) => new()
@@ -50,6 +66,7 @@ public static class CommandStore
 
         return new AppData
         {
+            Version = AppData.CurrentVersion,
             Commands =
             {
                 Cmd("play", ActionType.MediaPlayPause),

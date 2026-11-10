@@ -28,11 +28,20 @@ public class AppSettings : ObservableObject
 
     /// <summary>Anthropic API key, encrypted with Windows DPAPI (see SecretStore). Empty = use ANTHROPIC_API_KEY env var.</summary>
     public string EncryptedApiKey { get; set; } = "";
+
+    /// <summary>Show the "Delete command?" confirmation. Turned off by "Don't ask me again".</summary>
+    public bool ConfirmDelete { get; set; } = true;
 }
 
 /// <summary>Everything persisted to disk.</summary>
 public class AppData
 {
+    /// <summary>Bumped when the saved format changes, so old files can be upgraded once. 2 = Wait in seconds.</summary>
+    public const int CurrentVersion = 2;
+
+    /// <summary>0 for files saved before versioning existed.</summary>
+    public int Version { get; set; }
+
     public AppSettings Settings { get; set; } = new();
     public ObservableCollection<VoiceCommand> Commands { get; set; } = new();
 }

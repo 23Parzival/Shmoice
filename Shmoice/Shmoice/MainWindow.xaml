@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         xmlns:models="clr-namespace:Shmoice.Models"
-        Title="Shmoice" Height="720" Width="1080" MinHeight="480" MinWidth="680"
+        xmlns:local="clr-namespace:Shmoice"
+        Title="Shmoice" Height="720" Width="1080" MinHeight="480" MinWidth="820"
         Background="{StaticResource WindowBgBrush}" FontSize="13">
     <Window.Resources>
         <ObjectDataProvider x:Key="ActionTypes" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
@@ -11,6 +12,143 @@
                 <x:Type TypeName="models:ActionType" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
+        <local:ActionLabelConverter x:Key="ActionLabel" />
+
+        <!-- Column header shared by both step lists. Widths match StepRow below. -->
+        <Grid x:Key="StepHeaderTemplate" x:Shared="False" Margin="10,0,10,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="10" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="ACTION" Style="{StaticResource SectionLabel}" Margin="0" />
+            <TextBlock Grid.Column="2" Text="PARAMETER" Style="{StaticResource SectionLabel}" Margin="0" />
+            <TextBlock Grid.Column="4" Text="REPEAT" Style="{StaticResource SectionLabel}" Margin="0" Width="128" TextAlignment="Center" />
+            <Border Grid.Column="6" Width="84" />
+        </Grid>
+
+        <!-- One step = one row of real (theme-styled) controls, always editable. -->
+        <DataTemplate x:Key="StepRow" DataType="{x:Type models:ActionStep}">
+            <Border Background="#262630" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                    CornerRadius="8" Padding="10,8" Margin="0,0,0,6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="*" MinWidth="120" />
+                        <ColumnDefinition Width="10" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <ComboBox Grid.Column="0" ItemsSource="{Binding Source={StaticResource ActionTypes}}"
+                              SelectedItem="{Binding Type}" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource ActionLabel}}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <Grid Grid.Column="2" VerticalAlignment="Center">
+                        <TextBox Text="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding NeedsParameter}" />
+                        <TextBlock x:Name="Hint" Text="{Binding ParameterHint}" IsHitTestVisible="False" Visibility="Collapsed"
+                                   Foreground="{StaticResource MutedTextBrush}" Margin="12,0" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" FontStyle="Italic" />
+                    </Grid>
+
+                    <!-- Repeat stepper -->
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="−" Click="RepeatDown_Click" Width="34" Padding="0,4" FontSize="15" ToolTip="Fewer times" />
+                        <TextBox Text="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" Width="52" MinWidth="0" Margin="4,0"
+                                 TextAlignment="Center" FontSize="15" FontWeight="Bold" Padding="2,5"
+                                 Foreground="{StaticResource AppAccentBrush}" ToolTip="How many times to run this step" />
+                        <Button Content="+" Click="RepeatUp_Click" Width="34" Padding="0,4" FontSize="15" ToolTip="More times" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="↑" Click="MoveStepUp_Click" Width="38" Padding="0,4" Margin="0,0,6,0" ToolTip="Move up" />
+                        <Button Content="✕" Click="RemoveStep_Click" Width="38" Padding="0,4" ToolTip="Remove step" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Parameter}" Value="">
+                    <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Dashed "add step" row that sits right under the last step. -->
+        <Style x:Key="DashedAddButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <Rectangle x:Name="Outline" RadiusX="8" RadiusY="8" StrokeThickness="1.5" StrokeDashArray="4 3"
+                                       Stroke="{StaticResource CardBorderBrush}" />
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Outline" Property="Stroke" Value="{StaticResource AppAccentBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AppAccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The whole steps area for a command: fills all available height, header on top,
+             steps scroll, and the add row follows the last step. DataContext = VoiceCommand. -->
+        <DataTemplate x:Key="StepsPanel" DataType="{x:Type models:VoiceCommand}">
+            <Border Background="#1A1A21" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                    CornerRadius="10" Padding="10,10,10,4">
+                <DockPanel>
+                    <ContentControl DockPanel.Dock="Top" Content="{StaticResource StepHeaderTemplate}" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding Steps}" ItemTemplate="{StaticResource StepRow}" />
+                            <Button Style="{StaticResource DashedAddButton}" Click="AddStepInline_Click" Margin="0,0,0,6">
+                                <TextBlock Text="＋  Add a step" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- Right-click menu for a command in the list. DataContext = the VoiceCommand. -->
+        <ContextMenu x:Key="CommandMenu" x:Shared="False" Opened="CommandMenu_Opened">
+            <MenuItem Header="Test now" Click="MenuTest_Click">
+                <MenuItem.Icon><TextBlock Text="▶" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Rename" Click="MenuRename_Click">
+                <MenuItem.Icon><TextBlock Text="✏" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Duplicate" Click="MenuDuplicate_Click">
+                <MenuItem.Icon><TextBlock Text="⧉" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Enabled" IsCheckable="True" IsChecked="{Binding Enabled}" />
+            <Separator />
+            <MenuItem Header="Move to top" Click="MenuMoveTop_Click" />
+            <MenuItem Header="Move to bottom" Click="MenuMoveBottom_Click" />
+            <Separator />
+            <MenuItem Tag="AskBeforeDelete" Header="Ask before deleting" IsCheckable="True"
+                      Click="MenuAskBeforeDelete_Click" />
+            <MenuItem Header="Delete" Click="MenuDelete_Click" Foreground="#FF6B7A" InputGestureText="Del">
+                <MenuItem.Icon><TextBlock Text="🗑" Foreground="#FF6B7A" /></MenuItem.Icon>
+            </MenuItem>
+        </ContextMenu>
 
         <!-- Invisible drag area with a small visible grip; highlights on hover. -->
         <Style x:Key="VSplitter" TargetType="GridSplitter">
@@ -61,7 +199,7 @@
     <Grid Margin="20,14,20,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />                 <!-- header -->
-            <RowDefinition Height="Auto" />                 <!-- settings -->
+            <RowDefinition Height="Auto" />                 <!-- (unused; settings now sit in the tab row) -->
             <RowDefinition Height="*" MinHeight="220" />    <!-- tabs -->
             <RowDefinition Height="Auto" />                 <!-- splitter -->
             <RowDefinition Height="140" MinHeight="60" />   <!-- activity -->
@@ -87,25 +225,6 @@
             </StackPanel>
         </Grid>
 
-        <!-- ===== Listening settings ===== -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,12">
-            <WrapPanel Orientation="Horizontal">
-                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
-                    <TextBlock Text="Wake word" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
-                    <TextBox Text="{Binding Settings.WakeWord, UpdateSourceTrigger=PropertyChanged}" Width="140" VerticalAlignment="Center"
-                             ToolTip="Optional. If set, say this before each command, e.g. &quot;computer volume up&quot;." />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Min confidence" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
-                    <Slider Value="{Binding Settings.ConfidenceThreshold}" Minimum="0.3" Maximum="0.95" Width="160"
-                            VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True"
-                            ToolTip="Higher = fewer accidental triggers, but you may need to speak more clearly." />
-                    <TextBlock Text="{Binding Settings.ConfidenceThreshold, StringFormat={}{0:P0}}" VerticalAlignment="Center"
-                               Margin="10,0,0,0" MinWidth="36" FontWeight="SemiBold" />
-                </StackPanel>
-            </WrapPanel>
-        </Border>
-
         <!-- ===== Main tabs ===== -->
         <TabControl x:Name="MainTabs" Grid.Row="2" Background="Transparent" BorderThickness="0">
             <TabItem Header="Commands">
@@ -127,7 +246,14 @@
                                 </StackPanel>
                             </Grid>
                             <ListBox x:Name="CommandList" ItemsSource="{Binding Commands}" Background="Transparent" BorderThickness="0"
-                                     SelectionChanged="CommandList_SelectionChanged">
+                                     SelectionChanged="CommandList_SelectionChanged" KeyDown="CommandList_KeyDown">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="ContextMenu" Value="{StaticResource CommandMenu}" />
+                                        <EventSetter Event="PreviewMouseRightButtonDown" Handler="CommandItem_RightMouseDown" />
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,4">
@@ -158,38 +284,25 @@
                             <DockPanel x:Name="Editor" DataContext="{Binding SelectedItem, ElementName=CommandList}">
                                 <StackPanel DockPanel.Dock="Top">
                                     <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" />
-                                    <TextBox Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,18" />
+                                    <TextBox x:Name="PhraseBox" Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,18" />
                                     <TextBlock Text="DO THESE STEPS, IN ORDER" Style="{StaticResource SectionLabel}" />
                                 </StackPanel>
 
                                 <StackPanel DockPanel.Dock="Bottom">
                                     <WrapPanel Margin="0,10,0,0">
-                                        <Button Content="＋ Add step" Click="AddStep_Click" Margin="0,0,6,6" />
-                                        <Button Content="Remove" Click="RemoveStep_Click" Margin="0,0,6,6" />
-                                        <Button Content="↑ Move up" Click="MoveStepUp_Click" Margin="0,0,18,6" />
                                         <Button Content="▶  Test" Click="TestCommand_Click" Margin="0,0,6,6" />
                                         <Button Content="Save" Click="Save_Click" Style="{DynamicResource AccentButtonStyle}"
                                                 Padding="20,5" FontWeight="SemiBold" Margin="0,0,0,6" />
                                     </WrapPanel>
                                     <TextBlock Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11.5" LineHeight="17">
-                                        <Run FontWeight="SemiBold">KeyCombo</Run> keys joined by + (ctrl+shift+esc, alt+tab, win+d, f5) ·
-                                        <Run FontWeight="SemiBold">TypeText</Run> text to type ·
-                                        <Run FontWeight="SemiBold">Open</Run> program, file, folder or URL (arguments after |) ·
-                                        <Run FontWeight="SemiBold">Wait</Run> milliseconds · Volume steps move 2% each — use Repeat.
+                                        <Run FontWeight="SemiBold">Press keys</Run> join keys with + (ctrl+shift+esc, alt+tab, win+d, f5) ·
+                                        <Run FontWeight="SemiBold">Open</Run> add program arguments after | ·
+                                        <Run FontWeight="SemiBold">Volume</Run> each press is 2%, so use Repeat (5 = 10%).
                                     </TextBlock>
                                 </StackPanel>
 
-                                <DataGrid x:Name="StepsGrid" ItemsSource="{Binding Steps}" AutoGenerateColumns="False"
-                                          CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column"
-                                          GridLinesVisibility="None" RowHeight="38" Background="Transparent" BorderThickness="0">
-                                    <DataGrid.Columns>
-                                        <DataGridComboBoxColumn Header="Action" Width="170"
-                                                                ItemsSource="{Binding Source={StaticResource ActionTypes}}"
-                                                                SelectedItemBinding="{Binding Type, UpdateSourceTrigger=PropertyChanged}" />
-                                        <DataGridTextColumn Header="Parameter" Width="*" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" />
-                                        <DataGridTextColumn Header="Repeat" Width="80" Binding="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource StepsPanel}"
+                                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Focusable="False" />
                             </DockPanel>
 
                             <!-- Empty state -->
@@ -262,17 +375,8 @@
                                             FontWeight="SemiBold" Padding="16,5" Margin="0,0,0,6" />
                                 </WrapPanel>
 
-                                <DataGrid x:Name="AiStepsGrid" ItemsSource="{Binding Steps}" AutoGenerateColumns="False"
-                                          CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column"
-                                          GridLinesVisibility="None" RowHeight="38" Background="Transparent" BorderThickness="0">
-                                    <DataGrid.Columns>
-                                        <DataGridComboBoxColumn Header="Action" Width="170"
-                                                                ItemsSource="{Binding Source={StaticResource ActionTypes}}"
-                                                                SelectedItemBinding="{Binding Type, UpdateSourceTrigger=PropertyChanged}" />
-                                        <DataGridTextColumn Header="Parameter" Width="*" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" />
-                                        <DataGridTextColumn Header="Repeat" Width="80" Binding="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource StepsPanel}"
+                                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Focusable="False" />
                             </DockPanel>
 
                             <StackPanel x:Name="AiEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420">
@@ -288,6 +392,20 @@
                 </Grid>
             </TabItem>
         </TabControl>
+
+        <!-- ===== Listening settings: sit in the empty space to the right of the tab headers ===== -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Height="38">
+            <TextBlock Text="Wake word" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
+            <TextBox Text="{Binding Settings.WakeWord, UpdateSourceTrigger=PropertyChanged}" Width="130" VerticalAlignment="Center"
+                     ToolTip="Optional. If set, say this before each command, e.g. &quot;computer volume up&quot;." />
+            <Rectangle Width="1" Fill="{StaticResource CardBorderBrush}" Margin="18,8" />
+            <TextBlock Text="Min confidence" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
+            <Slider Value="{Binding Settings.ConfidenceThreshold}" Minimum="0.3" Maximum="0.95" Width="140"
+                    VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                    ToolTip="Higher = fewer accidental triggers, but you may need to speak more clearly." />
+            <TextBlock Text="{Binding Settings.ConfidenceThreshold, StringFormat={}{0:P0}}" VerticalAlignment="Center"
+                       Margin="10,0,0,0" MinWidth="36" FontWeight="SemiBold" />
+        </StackPanel>
 
         <GridSplitter Grid.Row="3" Style="{StaticResource HSplitter}" />
 
