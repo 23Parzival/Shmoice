@@ -23,6 +23,7 @@ public partial class MainWindow : Window
 
         if (_data.Commands.Count > 0) CommandList.SelectedIndex = 0;
         UpdateEditorState();
+        UpdateApiKeyStatus();
         Log($"Commands loaded from {CommandStore.FilePath}");
     }
 
@@ -92,9 +93,9 @@ public partial class MainWindow : Window
 
     private void SetStatus(bool listening)
     {
-        ListenButton.Content = listening ? "Stop listening" : "Start listening";
+        ListenButton.Content = listening ? "■  Stop listening" : "🎙  Start listening";
         StatusText.Text = listening ? "Listening…" : "Not listening";
-        StatusDot.Fill = listening ? Brushes.LimeGreen : Brushes.Gray;
+        StatusDot.Fill = (Brush)FindResource(listening ? "ListeningBrush" : "IdleBrush");
     }
 
     // ---- Command editing --------------------------------------------------------------
@@ -174,7 +175,130 @@ public partial class MainWindow : Window
     private void CommandList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
         UpdateEditorState();
 
-    private void UpdateEditorState() => Editor.IsEnabled = Selected != null;
+    private void UpdateEditorState()
+    {
+        var hasSelection = Selected != null;
+        Editor.Visibility = hasSelection ? Visibility.Visible : Visibility.Hidden;
+        EmptyState.Visibility = hasSelection ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // ---- AI Builder -------------------------------------------------------------------
+
+    private VoiceCommand? _draft;
+    private CancellationTokenSource? _generateCts;
+
+    private string GetApiKey()
+    {
+        var saved = SecretStore.Unprotect(_data.Settings.EncryptedApiKey);
+        return saved.Length > 0 ? saved : Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "";
+    }
+
+    private void UpdateApiKeyStatus()
+    {
+        if (SecretStore.Unprotect(_data.Settings.EncryptedApiKey).Length > 0)
+            ApiKeyStatus.Text = "✓ Key saved (encrypted for your Windows account). Paste a new one to replace it.";
+        else if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")))
+            ApiKeyStatus.Text = "✓ Using the ANTHROPIC_API_KEY environment variable.";
+        else
+            ApiKeyStatus.Text = "No key yet. Create one at console.anthropic.com → API Keys, paste it above, and press Save key.";
+    }
+
+    private void SaveApiKey_Click(object sender, RoutedEventArgs e)
+    {
+        var key = ApiKeyBox.Password.Trim();
+        _data.Settings.EncryptedApiKey = SecretStore.Protect(key);
+        ApiKeyBox.Clear();
+        SaveAll();
+        UpdateApiKeyStatus();
+        Log(key.Length > 0 ? "API key saved" : "API key removed");
+    }
+
+    private async void Generate_Click(object sender, RoutedEventArgs e)
+    {
+        // Second click while running = cancel.
+        if (_generateCts != null) { _generateCts.Cancel(); return; }
+
+        var description = AiPrompt.Text.Trim();
+        if (description.Length == 0) { AiStatus.Text = "Describe what you want the command to do first."; return; }
+        var apiKey = GetApiKey();
+        if (apiKey.Length == 0) { AiStatus.Text = "Add your Anthropic API key below first."; return; }
+
+        _generateCts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        GenerateButton.Content = "Cancel";
+        GenerateProgress.Visibility = Visibility.Visible;
+        AiStatus.Text = "Thinking…";
+        try
+        {
+            var draft = await AiCommandBuilder.GenerateAsync(apiKey, description, _generateCts.Token);
+            ShowDraft(draft);
+            AiStatus.Text = draft.Steps.Count == 0
+                ? "Couldn't turn that into steps — see the note on the right."
+                : "Review the steps, press Test to try them, then add it to your commands.";
+            Log($"AI suggested \"{draft.Phrase}\" ({draft.Steps.Count} step(s))");
+        }
+        catch (OperationCanceledException)
+        {
+            AiStatus.Text = "Cancelled.";
+        }
+        catch (Exception ex)
+        {
+            AiStatus.Text = "Error: " + ex.Message;
+            Log("AI builder failed: " + ex.Message);
+        }
+        finally
+        {
+            _generateCts.Dispose();
+            _generateCts = null;
+            GenerateButton.Content = "✨  Generate command";
+            GenerateProgress.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ShowDraft(AiDraft draft)
+    {
+        _draft = new VoiceCommand { Phrase = draft.Phrase };
+        foreach (var step in draft.Steps) _draft.Steps.Add(step);
+        AiPreview.DataContext = _draft;
+        AiExplanation.Text = draft.Explanation;
+        AiPreview.Visibility = Visibility.Visible;
+        AiEmptyState.Visibility = Visibility.Collapsed;
+    }
+
+    private void ClearDraft()
+    {
+        _draft = null;
+        AiPreview.DataContext = null;
+        AiPreview.Visibility = Visibility.Hidden;
+        AiEmptyState.Visibility = Visibility.Visible;
+    }
+
+    private async void AiTest_Click(object sender, RoutedEventArgs e)
+    {
+        if (_draft == null) return;
+        AiStepsGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
+        Log($"Testing AI suggestion \"{_draft.Phrase}\"");
+        await Run(_draft);
+    }
+
+    private void AiDiscard_Click(object sender, RoutedEventArgs e) => ClearDraft();
+
+    private void AiAdd_Click(object sender, RoutedEventArgs e)
+    {
+        if (_draft == null) return;
+        AiStepsGrid.CommitEdit(System.Windows.Controls.DataGridEditingUnit.Row, true);
+        if (string.IsNullOrWhiteSpace(_draft.Phrase)) { AiStatus.Text = "Give the command a phrase first."; return; }
+        if (_draft.Steps.Count == 0) { AiStatus.Text = "This suggestion has no steps to save."; return; }
+
+        var command = _draft;
+        ClearDraft();
+        AiPrompt.Clear();
+        AiStatus.Text = "";
+        _data.Commands.Add(command);
+        SaveAll();
+        MainTabs.SelectedIndex = 0;
+        CommandList.SelectedItem = command;
+        Log($"Added \"{command.Phrase}\" from AI Builder");
+    }
 
     // ---- Misc -------------------------------------------------------------------------
 

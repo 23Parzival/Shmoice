@@ -25,6 +25,9 @@ public class AppSettings : ObservableObject
 
     /// <summary>0..1 — recognitions below this are ignored to avoid false triggers.</summary>
     public double ConfidenceThreshold { get => _confidenceThreshold; set => Set(ref _confidenceThreshold, Math.Clamp(value, 0, 1)); }
+
+    /// <summary>Anthropic API key, encrypted with Windows DPAPI (see SecretStore). Empty = use ANTHROPIC_API_KEY env var.</summary>
+    public string EncryptedApiKey { get; set; } = "";
 }
 
 /// <summary>Everything persisted to disk.</summary>

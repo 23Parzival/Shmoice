@@ -3,111 +3,308 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         xmlns:models="clr-namespace:Shmoice.Models"
-        Title="Shmoice" Height="620" Width="960" MinHeight="450" MinWidth="720">
+        Title="Shmoice" Height="720" Width="1080" MinHeight="480" MinWidth="680"
+        Background="{StaticResource WindowBgBrush}" FontSize="13">
     <Window.Resources>
         <ObjectDataProvider x:Key="ActionTypes" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
             <ObjectDataProvider.MethodParameters>
                 <x:Type TypeName="models:ActionType" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="10,4" />
-            <Setter Property="Margin" Value="0,0,6,0" />
+
+        <!-- Invisible drag area with a small visible grip; highlights on hover. -->
+        <Style x:Key="VSplitter" TargetType="GridSplitter">
+            <Setter Property="Width" Value="14" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+            <Setter Property="ResizeDirection" Value="Columns" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Grid Background="Transparent">
+                            <Border x:Name="Grip" Width="4" Height="40" CornerRadius="2"
+                                    Background="{StaticResource CardBorderBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Grip" Property="Background" Value="{StaticResource AppAccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="HSplitter" TargetType="GridSplitter" BasedOn="{StaticResource VSplitter}">
+            <Setter Property="Width" Value="Auto" />
+            <Setter Property="Height" Value="14" />
+            <Setter Property="ResizeDirection" Value="Rows" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GridSplitter">
+                        <Grid Background="Transparent">
+                            <Border x:Name="Grip" Width="40" Height="4" CornerRadius="2"
+                                    Background="{StaticResource CardBorderBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Grip" Property="Background" Value="{StaticResource AppAccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
-    <DockPanel Margin="10">
-        <!-- Listening controls -->
-        <Border DockPanel.Dock="Top" BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="0,0,0,8" Margin="0,0,0,8">
-            <StackPanel Orientation="Horizontal">
-                <Button x:Name="ListenButton" Content="Start listening" Click="ListenButton_Click" FontWeight="SemiBold" />
-                <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="Gray" Margin="4,0,6,0" VerticalAlignment="Center" />
-                <TextBlock x:Name="StatusText" Text="Not listening" VerticalAlignment="Center" Width="180" />
-                <TextBlock Text="Wake word (optional):" VerticalAlignment="Center" Margin="12,0,6,0" />
-                <TextBox Text="{Binding Settings.WakeWord, UpdateSourceTrigger=PropertyChanged}" Width="110" VerticalAlignment="Center"
-                         ToolTip="If set, say this before each command, e.g. &quot;computer volume up&quot;." />
-                <TextBlock Text="Min confidence:" VerticalAlignment="Center" Margin="16,0,6,0" />
-                <Slider Value="{Binding Settings.ConfidenceThreshold}" Minimum="0.3" Maximum="0.95" Width="110"
-                        VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True" />
-                <TextBlock Text="{Binding Settings.ConfidenceThreshold, StringFormat={}{0:P0}}" VerticalAlignment="Center" Margin="6,0,0,0" />
+    <Grid Margin="20,14,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />                 <!-- header -->
+            <RowDefinition Height="Auto" />                 <!-- settings -->
+            <RowDefinition Height="*" MinHeight="220" />    <!-- tabs -->
+            <RowDefinition Height="Auto" />                 <!-- splitter -->
+            <RowDefinition Height="140" MinHeight="60" />   <!-- activity -->
+        </Grid.RowDefinitions>
+
+        <!-- ===== Header ===== -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Shmoice" FontSize="26" FontWeight="Bold" />
+                <TextBlock Text="Say it. Your PC does it." Foreground="{StaticResource MutedTextBrush}" />
             </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                        CornerRadius="14" Padding="12,5" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="{StaticResource IdleBrush}"
+                                 VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock x:Name="StatusText" Text="Not listening" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <Button x:Name="ListenButton" Content="🎙  Start listening" Click="ListenButton_Click"
+                        Style="{DynamicResource AccentButtonStyle}" Padding="18,8" FontWeight="SemiBold" />
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== Listening settings ===== -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="14,10" Margin="0,0,0,12">
+            <WrapPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Margin="0,0,20,0">
+                    <TextBlock Text="Wake word" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
+                    <TextBox Text="{Binding Settings.WakeWord, UpdateSourceTrigger=PropertyChanged}" Width="140" VerticalAlignment="Center"
+                             ToolTip="Optional. If set, say this before each command, e.g. &quot;computer volume up&quot;." />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Min confidence" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
+                    <Slider Value="{Binding Settings.ConfidenceThreshold}" Minimum="0.3" Maximum="0.95" Width="160"
+                            VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                            ToolTip="Higher = fewer accidental triggers, but you may need to speak more clearly." />
+                    <TextBlock Text="{Binding Settings.ConfidenceThreshold, StringFormat={}{0:P0}}" VerticalAlignment="Center"
+                               Margin="10,0,0,0" MinWidth="36" FontWeight="SemiBold" />
+                </StackPanel>
+            </WrapPanel>
         </Border>
 
-        <!-- Activity log -->
-        <GroupBox DockPanel.Dock="Bottom" Header="Activity" Height="130" Margin="0,8,0,0">
-            <ListBox x:Name="LogList" BorderThickness="0" FontFamily="Consolas" />
-        </GroupBox>
-
-        <TabControl>
+        <!-- ===== Main tabs ===== -->
+        <TabControl x:Name="MainTabs" Grid.Row="2" Background="Transparent" BorderThickness="0">
             <TabItem Header="Commands">
-                <Grid Margin="6">
+                <Grid Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="240" />
-                        <ColumnDefinition Width="12" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="280" MinWidth="170" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="320" />
                     </Grid.ColumnDefinitions>
 
                     <!-- Command list -->
-                    <DockPanel Grid.Column="0">
-                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
-                            <Button Content="+ New" Click="AddCommand_Click" />
-                            <Button Content="Delete" Click="DeleteCommand_Click" />
-                        </StackPanel>
-                        <ListBox x:Name="CommandList" ItemsSource="{Binding Commands}" SelectionChanged="CommandList_SelectionChanged">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <CheckBox IsChecked="{Binding Enabled}" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                        <TextBlock Text="{Binding Phrase}" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </DockPanel>
+                    <Border Grid.Column="0" Style="{StaticResource Card}" Padding="8">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" Margin="6,2,0,8">
+                                <TextBlock Text="YOUR COMMANDS" Style="{StaticResource SectionLabel}" VerticalAlignment="Center" Margin="0" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="＋" Click="AddCommand_Click" ToolTip="New command" Padding="10,2" Margin="0,0,4,0" />
+                                    <Button Content="🗑" Click="DeleteCommand_Click" ToolTip="Delete selected command" Padding="10,2" />
+                                </StackPanel>
+                            </Grid>
+                            <ListBox x:Name="CommandList" ItemsSource="{Binding Commands}" Background="Transparent" BorderThickness="0"
+                                     SelectionChanged="CommandList_SelectionChanged">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Phrase, StringFormat='“{0}”'}" FontWeight="SemiBold" FontSize="14"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Steps.Count, StringFormat={}{0} step(s)}"
+                                                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" />
+                                            </StackPanel>
+                                            <CheckBox Grid.Column="1" IsChecked="{Binding Enabled}" VerticalAlignment="Center"
+                                                      ToolTip="Enabled" MinWidth="0" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <GridSplitter Grid.Column="1" Style="{StaticResource VSplitter}" />
 
                     <!-- Command editor -->
-                    <DockPanel Grid.Column="2" x:Name="Editor" DataContext="{Binding SelectedItem, ElementName=CommandList}">
-                        <StackPanel DockPanel.Dock="Top">
-                            <TextBlock Text="Say this:" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="16" Margin="0,4,0,10" />
-                            <TextBlock Text="To do these steps, in order:" FontWeight="SemiBold" Margin="0,0,0,4" />
-                        </StackPanel>
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="18">
+                        <Grid>
+                            <DockPanel x:Name="Editor" DataContext="{Binding SelectedItem, ElementName=CommandList}">
+                                <StackPanel DockPanel.Dock="Top">
+                                    <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" />
+                                    <TextBox Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,18" />
+                                    <TextBlock Text="DO THESE STEPS, IN ORDER" Style="{StaticResource SectionLabel}" />
+                                </StackPanel>
 
-                        <StackPanel DockPanel.Dock="Bottom">
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                <Button Content="+ Step" Click="AddStep_Click" />
-                                <Button Content="Remove step" Click="RemoveStep_Click" />
-                                <Button Content="Move up" Click="MoveStepUp_Click" />
-                                <Button Content="▶ Test now" Click="TestCommand_Click" Margin="18,0,6,0" />
-                                <Button Content="Save" Click="Save_Click" FontWeight="SemiBold" />
-                            </StackPanel>
-                            <TextBlock Foreground="#666" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="11">
-                                Parameters — KeyCombo: keys joined by + (ctrl+shift+esc, alt+tab, win+d, f5) ·
-                                TypeText: text to type · Open: program, file, folder or URL (add arguments after |) ·
-                                Wait: milliseconds · Volume steps change volume by 2% each, so use Repeat.
-                            </TextBlock>
-                        </StackPanel>
+                                <StackPanel DockPanel.Dock="Bottom">
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <Button Content="＋ Add step" Click="AddStep_Click" Margin="0,0,6,6" />
+                                        <Button Content="Remove" Click="RemoveStep_Click" Margin="0,0,6,6" />
+                                        <Button Content="↑ Move up" Click="MoveStepUp_Click" Margin="0,0,18,6" />
+                                        <Button Content="▶  Test" Click="TestCommand_Click" Margin="0,0,6,6" />
+                                        <Button Content="Save" Click="Save_Click" Style="{DynamicResource AccentButtonStyle}"
+                                                Padding="20,5" FontWeight="SemiBold" Margin="0,0,0,6" />
+                                    </WrapPanel>
+                                    <TextBlock Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11.5" LineHeight="17">
+                                        <Run FontWeight="SemiBold">KeyCombo</Run> keys joined by + (ctrl+shift+esc, alt+tab, win+d, f5) ·
+                                        <Run FontWeight="SemiBold">TypeText</Run> text to type ·
+                                        <Run FontWeight="SemiBold">Open</Run> program, file, folder or URL (arguments after |) ·
+                                        <Run FontWeight="SemiBold">Wait</Run> milliseconds · Volume steps move 2% each — use Repeat.
+                                    </TextBlock>
+                                </StackPanel>
 
-                        <DataGrid x:Name="StepsGrid" ItemsSource="{Binding Steps}" AutoGenerateColumns="False"
-                                  CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column">
-                            <DataGrid.Columns>
-                                <DataGridComboBoxColumn Header="Action" Width="150"
-                                                        ItemsSource="{Binding Source={StaticResource ActionTypes}}"
-                                                        SelectedItemBinding="{Binding Type, UpdateSourceTrigger=PropertyChanged}" />
-                                <DataGridTextColumn Header="Parameter" Width="*" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" />
-                                <DataGridTextColumn Header="Repeat" Width="70" Binding="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </DockPanel>
+                                <DataGrid x:Name="StepsGrid" ItemsSource="{Binding Steps}" AutoGenerateColumns="False"
+                                          CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column"
+                                          GridLinesVisibility="None" RowHeight="38" Background="Transparent" BorderThickness="0">
+                                    <DataGrid.Columns>
+                                        <DataGridComboBoxColumn Header="Action" Width="170"
+                                                                ItemsSource="{Binding Source={StaticResource ActionTypes}}"
+                                                                SelectedItemBinding="{Binding Type, UpdateSourceTrigger=PropertyChanged}" />
+                                        <DataGridTextColumn Header="Parameter" Width="*" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" />
+                                        <DataGridTextColumn Header="Repeat" Width="80" Binding="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+
+                            <!-- Empty state -->
+                            <TextBlock x:Name="EmptyState" Text="Select a command, or click ＋ to make a new one."
+                                       Foreground="{StaticResource MutedTextBrush}" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
                 </Grid>
             </TabItem>
 
-            <TabItem Header="AI Builder (coming soon)">
-                <TextBlock Margin="16" TextWrapping="Wrap" Foreground="#666">
-                    Describe an action in plain words and an AI model will turn it into steps you can save as a command.
-                    Commands are stored as simple JSON steps (Action + Parameter + Repeat), which is the format the model will output.
-                </TextBlock>
+            <TabItem Header="✨ AI Builder">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="360" MinWidth="240" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" MinWidth="320" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Describe + API key -->
+                    <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16">
+                        <DockPanel>
+                            <!-- API key (bottom) -->
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                                <TextBlock Text="ANTHROPIC API KEY" Style="{StaticResource SectionLabel}" />
+                                <DockPanel>
+                                    <Button DockPanel.Dock="Right" Content="Save key" Click="SaveApiKey_Click" Margin="6,0,0,0" />
+                                    <PasswordBox x:Name="ApiKeyBox" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <TextBlock x:Name="ApiKeyStatus" Foreground="{StaticResource MutedTextBrush}" FontSize="11.5"
+                                           TextWrapping="Wrap" Margin="0,6,0,0" />
+                            </StackPanel>
+
+                            <!-- Describe (top) -->
+                            <StackPanel DockPanel.Dock="Top">
+                                <TextBlock Text="DESCRIBE WHAT YOU WANT" Style="{StaticResource SectionLabel}" />
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                <Button x:Name="GenerateButton" Content="✨  Generate command" Click="Generate_Click"
+                                        Style="{DynamicResource AccentButtonStyle}" HorizontalAlignment="Stretch"
+                                        Padding="0,8" FontWeight="SemiBold" />
+                                <ProgressBar x:Name="GenerateProgress" IsIndeterminate="True" Height="3" Margin="0,8,0,0" Visibility="Collapsed" />
+                                <TextBlock x:Name="AiStatus" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" />
+                            </StackPanel>
+                            <TextBox x:Name="AiPrompt" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                     VerticalContentAlignment="Top" MinHeight="90"
+                                     ToolTip="e.g. &quot;open YouTube in a new tab and turn the volume up a lot&quot; or &quot;show my desktop&quot;" />
+                        </DockPanel>
+                    </Border>
+
+                    <GridSplitter Grid.Column="1" Style="{StaticResource VSplitter}" />
+
+                    <!-- Suggestion preview -->
+                    <Border Grid.Column="2" Style="{StaticResource Card}" Padding="18">
+                        <Grid>
+                            <DockPanel x:Name="AiPreview" Visibility="Hidden">
+                                <StackPanel DockPanel.Dock="Top">
+                                    <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" />
+                                    <TextBox Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,10" />
+                                    <Border Background="#262033" BorderBrush="#3A3150" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,14">
+                                        <TextBlock x:Name="AiExplanation" TextWrapping="Wrap" />
+                                    </Border>
+                                    <TextBlock Text="DO THESE STEPS, IN ORDER" Style="{StaticResource SectionLabel}" />
+                                </StackPanel>
+
+                                <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+                                    <Button Content="▶  Test" Click="AiTest_Click" Margin="0,0,6,6" />
+                                    <Button Content="Discard" Click="AiDiscard_Click" Margin="0,0,6,6" />
+                                    <Button Content="＋ Add to my commands" Click="AiAdd_Click" Style="{DynamicResource AccentButtonStyle}"
+                                            FontWeight="SemiBold" Padding="16,5" Margin="0,0,0,6" />
+                                </WrapPanel>
+
+                                <DataGrid x:Name="AiStepsGrid" ItemsSource="{Binding Steps}" AutoGenerateColumns="False"
+                                          CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column"
+                                          GridLinesVisibility="None" RowHeight="38" Background="Transparent" BorderThickness="0">
+                                    <DataGrid.Columns>
+                                        <DataGridComboBoxColumn Header="Action" Width="170"
+                                                                ItemsSource="{Binding Source={StaticResource ActionTypes}}"
+                                                                SelectedItemBinding="{Binding Type, UpdateSourceTrigger=PropertyChanged}" />
+                                        <DataGridTextColumn Header="Parameter" Width="*" Binding="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" />
+                                        <DataGridTextColumn Header="Repeat" Width="80" Binding="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+
+                            <StackPanel x:Name="AiEmptyState" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420">
+                                <TextBlock Text="✨" FontSize="34" HorizontalAlignment="Center" />
+                                <TextBlock Text="Describe it, review it, keep it" FontSize="18" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center" Margin="0,8,0,8" />
+                                <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource MutedTextBrush}">
+                                    The suggested command shows up here. Nothing runs until you press Test, and nothing is saved until you add it to your commands.
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
             </TabItem>
         </TabControl>
-    </DockPanel>
+
+        <GridSplitter Grid.Row="3" Style="{StaticResource HSplitter}" />
+
+        <!-- ===== Activity log ===== -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="12,10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="ACTIVITY" Style="{StaticResource SectionLabel}" />
+                <ListBox x:Name="LogList" Background="Transparent" BorderThickness="0"
+                         FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource MutedTextBrush}">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                            <Setter Property="Padding" Value="6,1" />
+                            <Setter Property="MinHeight" Value="0" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </DockPanel>
+        </Border>
+    </Grid>
 </Window>
