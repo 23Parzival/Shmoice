@@ -1,7 +1,7 @@
-﻿<Application x:Class="Shmoice.App"
+<Application x:Class="Shmoice.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml"
+             xmlns:local="clr-namespace:Shmoice"
              ThemeMode="Dark">
     <!-- ThemeMode="Dark" turns on WPF's built-in Windows 11 (Fluent) styling for every control. -->
     <Application.Resources>
@@ -13,18 +13,115 @@
         <SolidColorBrush x:Key="CardBrush" Color="#1F1F27" />
         <SolidColorBrush x:Key="CardBorderBrush" Color="#2E2E3A" />
         <SolidColorBrush x:Key="WindowBgBrush" Color="#16161C" />
+        <!-- More palette colors. These are the dark-mode values; ThemeManager swaps all of them
+             (and the accent) at startup and whenever you change Appearance in Settings. -->
+        <SolidColorBrush x:Key="BodyTextBrush" Color="#C9C9D3" />
+        <SolidColorBrush x:Key="TextBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="RowBrush" Color="#262630" />
+        <SolidColorBrush x:Key="RowHoverBrush" Color="#262630" />
+        <SolidColorBrush x:Key="RowSelectedBrush" Color="#30303C" />
+        <SolidColorBrush x:Key="InsetBrush" Color="#1A1A21" />
+        <SolidColorBrush x:Key="MeterTrackBrush" Color="#3A3A48" />
+        <SolidColorBrush x:Key="DangerSoftBrush" Color="#3A1D24" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#262033" />
+        <SolidColorBrush x:Key="AccentSoftBorderBrush" Color="#3A3150" />
 
         <!-- Rounded panel used to group sections. -->
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource CardBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="10" />
             <Setter Property="Padding" Value="14" />
         </Style>
 
+        <SolidColorBrush x:Key="OnAccentBrush" Color="#FFFFFF" />
+
+        <!-- Main action button (Save, Generate, …) in the accent color. Ours rather than the theme's,
+             so it changes instantly with the accent setting. -->
+        <Style x:Key="AccentButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="5" Background="{DynamicResource AppAccentBrush}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.88" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.75" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <local:HalfRoundConverter x:Key="HalfRound" />
+        <!-- Level / confidence bar: fully rounded track and fill (the theme's bar has square ends that clash). -->
+        <Style x:Key="Meter" TargetType="ProgressBar">
+            <Setter Property="Foreground" Value="{DynamicResource ListeningBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <!-- Corner radius = half the height, so the ends are true half-circles. -->
+                        <Grid>
+                            <Border x:Name="PART_Track" Background="{DynamicResource MeterTrackBrush}"
+                                    CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource HalfRound}}" />
+                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left" Background="{TemplateBinding Foreground}"
+                                    CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource HalfRound}}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Every list row (sidebars, commands, history): rounded hover / selected background,
+             with a small accent bar on the left of the selected row. -->
+        <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <Setter Property="Padding" Value="14,6,10,6" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid Margin="0,1">
+                            <Border x:Name="Bd" CornerRadius="7" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                    MinHeight="{TemplateBinding MinHeight}">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Border>
+                            <Border x:Name="Marker" Width="3" CornerRadius="1.5" HorizontalAlignment="Left" Margin="0,10"
+                                    Background="{DynamicResource AppAccentBrush}" Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource RowHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource RowSelectedBrush}" />
+                                <Setter TargetName="Marker" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Margin" Value="0,0,0,6" />

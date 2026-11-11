@@ -29,7 +29,7 @@ public static class MessagePopup
         {
             Text = text,
             FontSize = 14,
-            Foreground = Brushes.White,
+            Foreground = res["TextBrush"] as Brush ?? Brushes.White,
             TextWrapping = TextWrapping.Wrap,
         });
 

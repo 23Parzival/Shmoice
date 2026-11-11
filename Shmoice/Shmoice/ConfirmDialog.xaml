@@ -34,7 +34,7 @@
     </Window.Resources>
 
     <!-- Outer margin leaves room for the drop shadow. -->
-    <Border Margin="18" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
+    <Border Margin="18" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
             BorderThickness="1" CornerRadius="12" Padding="24,22,24,20">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.55" Color="Black" />
@@ -45,20 +45,20 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Width="42" Height="42" CornerRadius="21" Background="#3A1D24" VerticalAlignment="Top" Margin="0,0,16,0">
+                <Border Width="42" Height="42" CornerRadius="21" Background="{DynamicResource DangerSoftBrush}" VerticalAlignment="Top" Margin="0,0,16,0">
                     <TextBlock x:Name="IconText" Text="🗑" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"
                                Foreground="#FF6B7A" />
                 </Border>
                 <StackPanel Grid.Column="1">
                     <TextBlock x:Name="TitleText" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock x:Name="MessageText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"
+                    <TextBlock x:Name="MessageText" Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap"
                                Margin="0,6,0,0" LineHeight="19" />
                 </StackPanel>
             </Grid>
 
             <Grid Margin="0,22,0,0">
                 <CheckBox x:Name="DontAskCheck" Content="Don't ask me again" VerticalAlignment="Center"
-                          Foreground="{StaticResource MutedTextBrush}" />
+                          Foreground="{DynamicResource MutedTextBrush}" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Cancel" IsCancel="True" Padding="18,7" Margin="0,0,8,0" Click="Cancel_Click" />
                     <Button x:Name="ConfirmButton" Content="Delete" IsDefault="True" Style="{StaticResource DangerButton}"

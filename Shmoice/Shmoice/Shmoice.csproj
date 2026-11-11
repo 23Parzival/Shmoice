@@ -23,6 +23,8 @@
   <ItemGroup>
     <!-- Also embedded as a WPF resource for the window title bars. -->
     <Resource Include="Assets\Shmoice.ico" />
+    <!-- Shown on the splash screen at launch. -->
+    <Resource Include="Assets\Logo.png" />
   </ItemGroup>
 
   <!-- Publish settings: one self-contained Shmoice.exe that runs without .NET installed.

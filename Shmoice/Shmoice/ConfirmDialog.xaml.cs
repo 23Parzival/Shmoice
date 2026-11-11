@@ -14,9 +14,10 @@ public partial class ConfirmDialog : Window
     }
 
     /// <summary>Shows the dialog. Returns true if confirmed; <paramref name="dontAskAgain"/> reports the checkbox.</summary>
-    public static bool Ask(Window owner, string title, string message, string confirmText, out bool dontAskAgain)
+    public static bool Ask(Window owner, string title, string message, string confirmText, out bool dontAskAgain, bool showDontAsk = true)
     {
         var dialog = new ConfirmDialog { Owner = owner };
+        if (!showDontAsk) dialog.DontAskCheck.Visibility = Visibility.Collapsed;
         dialog.TitleText.Text = title;
         dialog.MessageText.Text = message;
         dialog.ConfirmButton.Content = confirmText;

@@ -17,6 +17,31 @@ public partial class App : Application
         EventManager.RegisterClassHandler(typeof(PasswordBox), UIElement.KeyDownEvent, new KeyEventHandler(TextInput_KeyDown));
         EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewMouseDownEvent,
             new MouseButtonEventHandler(Window_PreviewMouseDown));
+
+        ShowSplashThenMainWindow();
+    }
+
+    /// <summary>Shows the logo for 2 seconds while the main window loads behind it, then fades into the app.</summary>
+    private async void ShowSplashThenMainWindow()
+    {
+        var main = new MainWindow(); // loads commands and settings (quick)
+        MainWindow = main;
+        var settings = main.Data.Settings;
+        if (settings.StartMinimized) main.WindowState = WindowState.Minimized;
+
+        // No splash when it's turned off, or when starting minimized (it would pop up over whatever you're doing).
+        if (!settings.ShowSplash || settings.StartMinimized)
+        {
+            main.Show();
+            return;
+        }
+
+        var splash = new SplashWindow();
+        splash.Show();
+        await Task.Delay(splash.Duration);
+        main.Show();
+        main.Activate();
+        await splash.FadeOutAndCloseAsync(); // fades over the main window, which is already there
     }
 
     private static void TextInput_KeyDown(object sender, KeyEventArgs e)

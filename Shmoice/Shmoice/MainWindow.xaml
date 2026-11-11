@@ -5,11 +5,14 @@
         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         xmlns:models="clr-namespace:Shmoice.Models"
         xmlns:local="clr-namespace:Shmoice"
+        xmlns:tabs="clr-namespace:Shmoice.Tabs"
         Title="Shmoice" Height="900" Width="1320" MinHeight="480" MinWidth="820"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource WindowBgBrush}" FontSize="13">
+        Background="{DynamicResource WindowBgBrush}" FontSize="13">
     <Window.Resources>
         <local:ActionLabelConverter x:Key="ActionLabel" />
+        <local:ProfileNameConverter x:Key="ProfileName" />
+        <local:NullGuidConverter x:Key="NullGuid" />
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
         <!-- Column header shared by both step lists. Widths match StepRow below. -->
@@ -31,7 +34,7 @@
 
         <!-- One step = one row of real (theme-styled) controls, always editable. -->
         <DataTemplate x:Key="StepRow" DataType="{x:Type models:ActionStep}">
-            <Border Background="#262630" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+            <Border Background="{DynamicResource RowBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                     CornerRadius="8" Padding="10,8" Margin="0,0,0,6">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -52,7 +55,7 @@
                         <!-- "Press keys" records the keys you press instead of typing them. -->
                         <local:KeyRecorder x:Name="KeyBox" Combo="{Binding Parameter, Mode=TwoWay}" Visibility="Collapsed" />
                         <TextBlock x:Name="Hint" Text="{Binding ParameterHint}" IsHitTestVisible="False" Visibility="Collapsed"
-                                   Foreground="{StaticResource MutedTextBrush}" Margin="12,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource MutedTextBrush}" Margin="12,0" VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" FontStyle="Italic" />
                     </Grid>
 
@@ -62,7 +65,7 @@
                         <TextBox Text="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" Width="52" MinWidth="0" Margin="4,0"
                                  local:InputFilter.Kind="Integer" MaxLength="3"
                                  TextAlignment="Center" FontSize="15" FontWeight="Bold" Padding="2,5"
-                                 Foreground="{StaticResource AppAccentBrush}" ToolTip="How many times to run this step" />
+                                 Foreground="{DynamicResource AppAccentBrush}" ToolTip="How many times to run this step" />
                         <Button Content="+" Click="RepeatUp_Click" Width="34" Padding="0,4" FontSize="15" ToolTip="More times" />
                     </StackPanel>
 
@@ -94,7 +97,7 @@
 
         <!-- Dashed "add step" row that sits right under the last step. -->
         <Style x:Key="DashedAddButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedTextBrush}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Height" Value="46" />
             <Setter Property="Template">
@@ -102,13 +105,13 @@
                     <ControlTemplate TargetType="Button">
                         <Grid Background="Transparent">
                             <Rectangle x:Name="Outline" RadiusX="8" RadiusY="8" StrokeThickness="1.5" StrokeDashArray="4 3"
-                                       Stroke="{StaticResource CardBorderBrush}" />
+                                       Stroke="{DynamicResource CardBorderBrush}" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Outline" Property="Stroke" Value="{StaticResource AppAccentBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource AppAccentBrush}" />
+                                <Setter TargetName="Outline" Property="Stroke" Value="{DynamicResource AppAccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -119,7 +122,7 @@
         <!-- The whole steps area for a command: fills all available height, header on top,
              steps scroll, and the add row follows the last step. DataContext = VoiceCommand. -->
         <DataTemplate x:Key="StepsPanel" DataType="{x:Type models:VoiceCommand}">
-            <Border Background="#1A1A21" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+            <Border Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                     CornerRadius="10" Padding="10,10,10,4">
                 <DockPanel>
                     <ContentControl DockPanel.Dock="Top" Content="{StaticResource StepHeaderTemplate}" />
@@ -171,11 +174,11 @@
                     <ControlTemplate TargetType="GridSplitter">
                         <Grid Background="Transparent">
                             <Border x:Name="Grip" Width="4" Height="40" CornerRadius="2"
-                                    Background="{StaticResource CardBorderBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    Background="{DynamicResource CardBorderBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Grip" Property="Background" Value="{StaticResource AppAccentBrush}" />
+                                <Setter TargetName="Grip" Property="Background" Value="{DynamicResource AppAccentBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -191,11 +194,11 @@
                     <ControlTemplate TargetType="GridSplitter">
                         <Grid Background="Transparent">
                             <Border x:Name="Grip" Width="40" Height="4" CornerRadius="2"
-                                    Background="{StaticResource CardBorderBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    Background="{DynamicResource CardBorderBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Grip" Property="Background" Value="{StaticResource AppAccentBrush}" />
+                                <Setter TargetName="Grip" Property="Background" Value="{DynamicResource AppAccentBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -217,13 +220,13 @@
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel VerticalAlignment="Center">
                 <TextBlock Text="Shmoice" FontSize="26" FontWeight="Bold" />
-                <TextBlock Text="Say it. Your PC does it." Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock Text="Say it. Your PC does it." Foreground="{DynamicResource MutedTextBrush}" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Border Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                         CornerRadius="14" Padding="12,5" Margin="0,0,12,0" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="{StaticResource IdleBrush}"
+                        <Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="{DynamicResource IdleBrush}"
                                  VerticalAlignment="Center" Margin="0,0,8,0" />
                         <TextBlock x:Name="StatusText" Text="Not listening" VerticalAlignment="Center" />
                     </StackPanel>
@@ -234,7 +237,7 @@
                         <TextBlock Text="🎙" Margin="0,0,8,0" VerticalAlignment="Center" />
                         <TextBlock x:Name="MicButtonText" MaxWidth="220" TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center" />
-                        <TextBlock Text="▾" Margin="8,0,0,0" Foreground="{StaticResource MutedTextBrush}"
+                        <TextBlock Text="▾" Margin="8,0,0,0" Foreground="{DynamicResource MutedTextBrush}"
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -267,10 +270,10 @@
                                 <TextBox x:Name="CommandSearch" TextChanged="CommandSearch_TextChanged" KeyDown="CommandSearch_KeyDown"
                                          ToolTip="Search by phrase or by what the command does" />
                                 <TextBlock x:Name="CommandSearchHint" Text="Search commands…" IsHitTestVisible="False" Margin="12,0"
-                                           VerticalAlignment="Center" FontStyle="Italic" Foreground="{StaticResource MutedTextBrush}" />
+                                           VerticalAlignment="Center" FontStyle="Italic" Foreground="{DynamicResource MutedTextBrush}" />
                             </Grid>
                             <TextBlock x:Name="NoCommandMatches" DockPanel.Dock="Top" Text="No commands match." Margin="8,4"
-                                       Foreground="{StaticResource MutedTextBrush}" Visibility="Collapsed" />
+                                       Foreground="{DynamicResource MutedTextBrush}" Visibility="Collapsed" />
                             <ListBox x:Name="CommandList" ItemsSource="{Binding Commands}" Background="Transparent" BorderThickness="0"
                                      SelectionChanged="CommandList_SelectionChanged" KeyDown="CommandList_KeyDown">
                                 <ListBox.ItemContainerStyle>
@@ -290,8 +293,11 @@
                                             <StackPanel>
                                                 <TextBlock Text="{Binding Phrase, StringFormat='“{0}”'}" FontWeight="SemiBold" FontSize="14"
                                                            TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding Steps.Count, StringFormat={}{0} step(s)}"
-                                                           Foreground="{StaticResource MutedTextBrush}" FontSize="11" />
+                                                <TextBlock Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextTrimming="CharacterEllipsis">
+                                                    <Run Text="{Binding Steps.Count, Mode=OneWay, StringFormat={}{0} step(s)}" /><Run
+                                                         Text="{Binding ProfileId, Mode=OneWay, Converter={StaticResource ProfileName}}"
+                                                         Foreground="{DynamicResource AppAccentBrush}" />
+                                                </TextBlock>
                                             </StackPanel>
                                             <CheckBox Grid.Column="1" IsChecked="{Binding Enabled}" VerticalAlignment="Center"
                                                       ToolTip="Enabled" MinWidth="0" />
@@ -310,14 +316,21 @@
                             <DockPanel x:Name="Editor" DataContext="{Binding SelectedItem, ElementName=CommandList}">
                                 <StackPanel DockPanel.Dock="Top">
                                     <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" />
-                                    <TextBox x:Name="PhraseBox" Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,18" />
+                                    <TextBox x:Name="PhraseBox" Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,10" />
+                                    <!-- Profiles: limit this command to certain apps. -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                        <TextBlock Text="Runs in" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,10,0" />
+                                        <ComboBox x:Name="ProfileCombo" Width="240" SelectedValuePath="Id" DisplayMemberPath="Name"
+                                                  SelectedValue="{Binding ProfileId, Converter={StaticResource NullGuid}}"
+                                                  ToolTip="Any app, or only while the apps of a profile are in front (set up in the Profiles tab)" />
+                                    </StackPanel>
                                     <TextBlock Text="DO THESE STEPS, IN ORDER" Style="{StaticResource SectionLabel}" />
                                 </StackPanel>
 
                                 <StackPanel DockPanel.Dock="Bottom">
                                     <WrapPanel Margin="0,10,0,0">
                                         <Button Content="▶  Test" Click="TestCommand_Click" Margin="0,0,6,6" />
-                                        <Button Content="Save" Click="Save_Click" Style="{DynamicResource AccentButtonStyle}"
+                                        <Button Content="Save" Click="Save_Click" Style="{StaticResource AccentButton}"
                                                 Padding="20,5" FontWeight="SemiBold" Margin="0,0,0,6" />
                                     </WrapPanel>
                                     <!-- Quick tips for the steps whose parameter isn't obvious. -->
@@ -327,7 +340,7 @@
                                         <ToggleButton.Template>
                                             <ControlTemplate TargetType="ToggleButton">
                                                 <StackPanel Orientation="Horizontal" Background="Transparent">
-                                                    <TextBlock x:Name="Arrow" Text="▸" Width="12" Foreground="{StaticResource MutedTextBrush}"
+                                                    <TextBlock x:Name="Arrow" Text="▸" Width="12" Foreground="{DynamicResource MutedTextBrush}"
                                                                FontSize="11" VerticalAlignment="Center" />
                                                     <TextBlock x:Name="Label" Text="TIPS" Style="{StaticResource SectionLabel}" Margin="0" />
                                                 </StackPanel>
@@ -343,7 +356,7 @@
                                             </ControlTemplate>
                                         </ToggleButton.Template>
                                     </ToggleButton>
-                                    <StackPanel TextBlock.Foreground="{StaticResource MutedTextBrush}" TextBlock.FontSize="11.5"
+                                    <StackPanel TextBlock.Foreground="{DynamicResource MutedTextBrush}" TextBlock.FontSize="11.5"
                                                 Margin="12,4,0,0"
                                                 Visibility="{Binding IsChecked, ElementName=TipsToggle, Converter={StaticResource BoolToVisibility}}">
                                         <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
@@ -387,7 +400,7 @@
 
                             <!-- Empty state -->
                             <TextBlock x:Name="EmptyState" Text="Select a command, or click ＋ to make a new one."
-                                       Foreground="{StaticResource MutedTextBrush}" FontSize="14"
+                                       Foreground="{DynamicResource MutedTextBrush}" FontSize="14"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
                         </Grid>
                     </Border>
@@ -412,7 +425,7 @@
                                     <Button DockPanel.Dock="Right" Content="Save key" Click="SaveApiKey_Click" Margin="6,0,0,0" />
                                     <PasswordBox x:Name="ApiKeyBox" VerticalAlignment="Center" />
                                 </DockPanel>
-                                <TextBlock x:Name="ApiKeyStatus" Foreground="{StaticResource MutedTextBrush}" FontSize="11.5"
+                                <TextBlock x:Name="ApiKeyStatus" Foreground="{DynamicResource MutedTextBrush}" FontSize="11.5"
                                            TextWrapping="Wrap" Margin="0,6,0,0" />
                             </StackPanel>
 
@@ -422,10 +435,10 @@
                             </StackPanel>
                             <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
                                 <Button x:Name="GenerateButton" Content="✨  Generate command" Click="Generate_Click"
-                                        Style="{DynamicResource AccentButtonStyle}" HorizontalAlignment="Stretch"
+                                        Style="{StaticResource AccentButton}" HorizontalAlignment="Stretch"
                                         Padding="0,8" FontWeight="SemiBold" />
                                 <ProgressBar x:Name="GenerateProgress" IsIndeterminate="True" Height="3" Margin="0,8,0,0" Visibility="Collapsed" />
-                                <TextBlock x:Name="AiStatus" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" />
+                                <TextBlock x:Name="AiStatus" TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{DynamicResource MutedTextBrush}" />
                             </StackPanel>
                             <TextBox x:Name="AiPrompt" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
                                      VerticalContentAlignment="Top" MinHeight="90"
@@ -442,7 +455,7 @@
                                 <StackPanel DockPanel.Dock="Top">
                                     <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" />
                                     <TextBox Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,10" />
-                                    <Border Background="#262033" BorderBrush="#3A3150" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,14">
+                                    <Border Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentSoftBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,14">
                                         <TextBlock x:Name="AiExplanation" TextWrapping="Wrap" />
                                     </Border>
                                     <TextBlock Text="DO THESE STEPS, IN ORDER" Style="{StaticResource SectionLabel}" />
@@ -451,7 +464,7 @@
                                 <WrapPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
                                     <Button Content="▶  Test" Click="AiTest_Click" Margin="0,0,6,6" />
                                     <Button Content="Discard" Click="AiDiscard_Click" Margin="0,0,6,6" />
-                                    <Button Content="＋ Add to my commands" Click="AiAdd_Click" Style="{DynamicResource AccentButtonStyle}"
+                                    <Button Content="＋ Add to my commands" Click="AiAdd_Click" Style="{StaticResource AccentButton}"
                                             FontWeight="SemiBold" Padding="16,5" Margin="0,0,0,6" />
                                 </WrapPanel>
 
@@ -463,13 +476,33 @@
                                 <TextBlock Text="✨" FontSize="34" HorizontalAlignment="Center" />
                                 <TextBlock Text="Describe it, review it, keep it" FontSize="18" FontWeight="SemiBold"
                                            HorizontalAlignment="Center" Margin="0,8,0,8" />
-                                <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource MutedTextBrush}">
+                                <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource MutedTextBrush}">
                                     The suggested command shows up here. Nothing runs until you press Test, and nothing is saved until you add it to your commands.
                                 </TextBlock>
                             </StackPanel>
                         </Grid>
                     </Border>
                 </Grid>
+            </TabItem>
+
+            <!-- The other tabs live in their own files under Tabs\. -->
+            <TabItem Header="Profiles">
+                <tabs:ProfilesTab x:Name="ProfilesTabControl" />
+            </TabItem>
+            <TabItem Header="Schedules">
+                <tabs:SchedulesTab x:Name="SchedulesTabControl" />
+            </TabItem>
+            <TabItem Header="History">
+                <tabs:HistoryTab x:Name="HistoryTabControl" />
+            </TabItem>
+            <TabItem Header="Voice test">
+                <tabs:VoiceTestTab x:Name="VoiceTestTabControl" />
+            </TabItem>
+            <TabItem Header="Settings">
+                <tabs:SettingsTab x:Name="SettingsTabControl" />
+            </TabItem>
+            <TabItem Header="Help">
+                <tabs:HelpTab x:Name="HelpTabControl" />
             </TabItem>
         </TabControl>
 
@@ -482,29 +515,6 @@
                     FontSize="20" IsEnabled="False" ToolTip="Forward: redo, or go forward again (Alt+Right)" />
         </StackPanel>
 
-        <!-- ===== Listening settings: sit in the empty space to the right of the tab headers ===== -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Height="38">
-            <TextBlock Text="Wake word" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
-            <TextBox Text="{Binding Settings.WakeWord, UpdateSourceTrigger=PropertyChanged}" Width="130" VerticalAlignment="Center"
-                     local:InputFilter.Kind="Words" MaxLength="30"
-                     ToolTip="Required. Say this before each command, e.g. &quot;computer volume up&quot;." />
-            <Rectangle Width="1" Fill="{StaticResource CardBorderBrush}" Margin="18,8" />
-            <TextBlock Text="Min confidence" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
-            <Slider Value="{Binding Settings.ConfidenceThreshold}" Minimum="0.3" Maximum="0.95" Width="140"
-                    VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True"
-                    ToolTip="Higher = fewer accidental triggers, but you may need to speak more clearly." />
-            <TextBlock Text="{Binding Settings.ConfidenceThreshold, StringFormat={}{0:P0}}" VerticalAlignment="Center"
-                       Margin="10,0,0,0" MinWidth="36" FontWeight="SemiBold" />
-            <Rectangle Width="1" Fill="{StaticResource CardBorderBrush}" Margin="18,8" />
-            <TextBlock Text="Chime" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
-            <!-- Plays the chime when you let go, so you can hear the new volume. -->
-            <Slider x:Name="ChimeSlider" Value="{Binding Settings.ChimeVolume}" Minimum="0" Maximum="1" Width="100"
-                    VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True"
-                    PreviewMouseLeftButtonUp="ChimeSlider_Released" KeyUp="ChimeSlider_Released"
-                    ToolTip="Volume of the chime that plays when Listen for words starts. All the way left turns it off." />
-            <TextBlock Text="{Binding Settings.ChimeVolume, StringFormat={}{0:P0}}" VerticalAlignment="Center"
-                       Margin="10,0,0,0" MinWidth="36" FontWeight="SemiBold" />
-        </StackPanel>
 
         <GridSplitter Grid.Row="3" Style="{StaticResource HSplitter}" />
 
@@ -513,7 +523,7 @@
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="ACTIVITY" Style="{StaticResource SectionLabel}" />
                 <ListBox x:Name="LogList" Background="Transparent" BorderThickness="0"
-                         FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{StaticResource MutedTextBrush}">
+                         FontFamily="Cascadia Mono, Consolas" FontSize="12" Foreground="{DynamicResource MutedTextBrush}">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                             <Setter Property="Padding" Value="6,1" />

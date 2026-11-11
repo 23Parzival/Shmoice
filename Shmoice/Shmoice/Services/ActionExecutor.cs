@@ -14,7 +14,8 @@ public static class ActionExecutor
     /// </summary>
     public static Func<TimeSpan, Task<string>>? ListenForWords { get; set; }
 
-    public static Task RunAsync(VoiceCommand command) => Task.Run(async () =>
+    /// <summary>Runs every step in order. Returns what a "Listen for words" step heard ("" if none).</summary>
+    public static Task<string> RunAsync(VoiceCommand command) => Task.Run(async () =>
     {
         var heard = ""; // what the last "Listen for words" step heard; steps use it as {heard}
         foreach (var step in command.Steps.ToList())
@@ -30,6 +31,7 @@ public static class ActionExecutor
                 if (step.Repeat > 1) await Task.Delay(30);
             }
         }
+        return heard;
     });
 
     private static async Task<string> ListenAsync(string secondsText)

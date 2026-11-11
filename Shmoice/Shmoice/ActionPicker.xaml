@@ -13,7 +13,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="LabelText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                 <TextBlock Grid.Column="1" Text="▾" Margin="8,0,0,0" FontSize="11" VerticalAlignment="Center"
-                           Foreground="{StaticResource MutedTextBrush}" />
+                           Foreground="{DynamicResource MutedTextBrush}" />
             </Grid>
         </ToggleButton>
 
@@ -21,16 +21,16 @@
                StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
                IsOpen="{Binding IsChecked, ElementName=OpenButton, Mode=TwoWay}"
                Opened="Popup_Opened" Closed="Popup_Closed">
-            <Border x:Name="PopupBody" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
+            <Border x:Name="PopupBody" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="6" PreviewKeyDown="PopupBody_PreviewKeyDown">
                 <DockPanel>
                     <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
                         <TextBox x:Name="SearchBox" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" />
                         <TextBlock x:Name="SearchHint" Text="Search actions…" IsHitTestVisible="False" Margin="12,0"
-                                   VerticalAlignment="Center" FontStyle="Italic" Foreground="{StaticResource MutedTextBrush}" />
+                                   VerticalAlignment="Center" FontStyle="Italic" Foreground="{DynamicResource MutedTextBrush}" />
                     </Grid>
                     <TextBlock x:Name="NoMatches" DockPanel.Dock="Top" Text="No actions match." Margin="10,6"
-                               Foreground="{StaticResource MutedTextBrush}" Visibility="Collapsed" />
+                               Foreground="{DynamicResource MutedTextBrush}" Visibility="Collapsed" />
                     <TreeView x:Name="Tree" MaxHeight="420" Background="Transparent" BorderThickness="0"
                               PreviewMouseLeftButtonUp="Tree_PreviewMouseLeftButtonUp">
                         <TreeView.Resources>
@@ -38,7 +38,7 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding Items.Count}" Margin="8,0,0,0" FontSize="11"
-                                               VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" />
+                                               VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
                                 </StackPanel>
                             </HierarchicalDataTemplate>
                             <DataTemplate DataType="{x:Type local:ActionNode}">

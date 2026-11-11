@@ -11,7 +11,7 @@
         <Button x:Name="RecordButton" Click="Record_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                 ToolTip="Click, then press the key or combo you want (Esc to cancel)">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="⌨" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock Text="⌨" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" />
                 <TextBlock x:Name="LabelText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             </StackPanel>
         </Button>

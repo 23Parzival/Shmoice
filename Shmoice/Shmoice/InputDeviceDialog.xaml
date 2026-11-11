@@ -7,7 +7,7 @@
         ResizeMode="NoResize" ShowInTaskbar="False" WindowStartupLocation="CenterOwner"
         FontSize="13">
     <!-- Outer margin leaves room for the drop shadow. -->
-    <Border Margin="18" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
+    <Border Margin="18" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
             BorderThickness="1" CornerRadius="12" Padding="24,22,24,20">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.55" Color="Black" />
@@ -18,12 +18,12 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <Border Width="42" Height="42" CornerRadius="21" Background="#2A2350" VerticalAlignment="Top" Margin="0,0,16,0">
+                <Border Width="42" Height="42" CornerRadius="21" Background="{DynamicResource AccentSoftBrush}" VerticalAlignment="Top" Margin="0,0,16,0">
                     <TextBlock Text="🎙" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
                 <StackPanel Grid.Column="1">
                     <TextBlock Text="Which input should Shmoice listen to?" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <TextBlock Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" LineHeight="19"
+                    <TextBlock Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" LineHeight="19"
                                Text="Pick the microphone your voice commands will come from." />
                 </StackPanel>
             </Grid>
@@ -37,16 +37,16 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="Level" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Text="Level" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
                 <ProgressBar x:Name="LevelBar" Grid.Column="1" Minimum="0" Maximum="1" Height="8"
-                             Foreground="{StaticResource ListeningBrush}" />
+                             Style="{StaticResource Meter}" />
             </Grid>
-            <TextBlock x:Name="LevelHint" Foreground="{StaticResource MutedTextBrush}" FontSize="11.5" TextWrapping="Wrap"
+            <TextBlock x:Name="LevelHint" Foreground="{DynamicResource MutedTextBrush}" FontSize="11.5" TextWrapping="Wrap"
                        Margin="0,6,0,0" Text="Say something. The bar should move while you talk." />
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
                 <Button Content="Cancel" IsCancel="True" Padding="18,7" Margin="0,0,8,0" Click="Cancel_Click" />
-                <Button Content="Use this microphone" IsDefault="True" Style="{StaticResource AccentButtonStyle}"
+                <Button Content="Use this microphone" IsDefault="True" Style="{StaticResource AccentButton}"
                         Padding="18,7" Click="Start_Click" />
             </StackPanel>
         </StackPanel>

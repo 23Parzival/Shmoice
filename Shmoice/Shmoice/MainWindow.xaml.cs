@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Shmoice.Models;
 using Shmoice.Services;
+using Shmoice.Tabs;
 
 namespace Shmoice;
 
@@ -24,10 +25,22 @@ public partial class MainWindow : Window
         Height = Math.Max(MinHeight, Math.Min(Height, area.Height * 0.94));
         _data = CommandStore.Load();
         DataContext = _data;
+        ThemeManager.Apply(_data.Settings); // light / dark and accent color, before anything is shown
+        // Switching light / dark rebuilds the tab headers, which drops the room made for ‹ ›; put it back.
+        ThemeManager.Applied += () => Dispatcher.BeginInvoke(MakeRoomForNavButtons, System.Windows.Threading.DispatcherPriority.Loaded);
+        // "Runs in" picker: "Any app" (Guid.Empty, see NullGuidConverter) followed by every profile.
+        ProfileNameConverter.Data = _data;
+        ProfileCombo.ItemsSource = new System.Windows.Data.CompositeCollection
+        {
+            new Profile { Id = Guid.Empty, Name = "Any app" },
+            new System.Windows.Data.CollectionContainer { Collection = _data.Profiles },
+        };
+        foreach (var tab in new ITab[] { ProfilesTabControl, SchedulesTabControl, HistoryTabControl, VoiceTestTabControl, HelpTabControl })
+            tab.Attach(this);
+        SettingsTabControl.Host = this;
 
         _listener.Recognized += (phrase, confidence) => Dispatcher.Invoke(() => OnHeard(phrase, confidence));
-        _listener.LowConfidence += (phrase, confidence) =>
-            Dispatcher.Invoke(() => Log($"Ignored \"{phrase}\" ({confidence:P0} < threshold)"));
+        _listener.LowConfidence += (phrase, confidence) => Dispatcher.Invoke(() => OnLowConfidence(phrase, confidence));
         ActionExecutor.ListenForWords = ListenForWordsAsync;
 
         if (_data.Commands.Count > 0) CommandList.SelectedIndex = 0;
@@ -45,6 +58,9 @@ public partial class MainWindow : Window
             RecordNavigation(); // the starting point for Back
             _editWatch.Tick += EditWatch_Tick;
             _editWatch.Start();
+            UpdateScheduleStatus();
+            _scheduleTimer.Tick += ScheduleTimer_Tick;
+            _scheduleTimer.Start();
         };
     }
 
@@ -53,7 +69,13 @@ public partial class MainWindow : Window
     // ---- Listening --------------------------------------------------------------------
 
     /// <summary>The mic button only picks the input; listening itself is always on.</summary>
-    private void MicButton_Click(object sender, RoutedEventArgs e)
+    private void MicButton_Click(object sender, RoutedEventArgs e) => ChooseMicrophone();
+
+    /// <summary>The microphone being listened to, as shown on the mic button.</summary>
+    public string MicrophoneName => MicButtonText.Text;
+
+    /// <summary>Opens the microphone picker (also used by the Settings tab).</summary>
+    public void ChooseMicrophone()
     {
         List<AudioInput> inputs;
         try { inputs = AudioInputs.List(); }
@@ -72,6 +94,9 @@ public partial class MainWindow : Window
     }
 
     /// <summary>The saved microphone, or the Windows default if it isn't connected.</summary>
+    /// <summary>The microphone being listened to right now (or the saved one if not listening).</summary>
+    public AudioInput CurrentInput() => _listener.Input ?? SavedInput();
+
     private AudioInput SavedInput()
     {
         var saved = _data.Settings.InputDeviceName;
@@ -129,8 +154,8 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName is nameof(AppSettings.WakeWord) or nameof(AppSettings.ConfidenceThreshold))
             _listeningSettingsChanged = true;
-        else if (e.PropertyName != nameof(AppSettings.ChimeVolume))
-            return;
+        if (e.PropertyName is nameof(AppSettings.AccentColor) or nameof(AppSettings.Theme))
+            ThemeManager.Apply(_data.Settings); // recolor right away; saving can wait
         _settingsDebounce.Stop();
         _settingsDebounce.Start();
     }
@@ -144,36 +169,111 @@ public partial class MainWindow : Window
         RefreshListening();
     }
 
-    /// <summary>Lets you hear the chime volume you just picked.</summary>
-    private void ChimeSlider_Released(object sender, RoutedEventArgs e)
-    {
-        // Keyboard: only the keys that move the slider (not e.g. Tab leaving it).
-        if (e is KeyEventArgs k && k.Key is not (Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown))
-            return;
-        Chime.Play(_data.Settings.ChimeVolume);
-    }
 
     private IEnumerable<string> EnabledPhrases() =>
         _data.Commands.Where(c => c.Enabled && c.Steps.Count > 0).Select(c => c.Phrase);
+
+    // ---- Running commands ---------------------------------------------------------------
+
+    /// <summary>Saved list of everything that ran (History tab).</summary>
+    public HistoryStore History { get; } = HistoryStore.Load();
+
+    public AppData Data => _data;
+
+    /// <summary>Voice test's practice mode: show what was heard, but don't run anything.</summary>
+    public bool PracticeMode { get; set; }
+
+    /// <summary>Something was heard (for the Voice test tab): phrase, confidence, and what Shmoice did about it.</summary>
+    public event Action<string, float, string>? Heard;
 
     private async void OnHeard(string phrase, float confidence)
     {
         var matches = _data.Commands
             .Where(c => c.Enabled && string.Equals(c.Phrase.Trim(), phrase, StringComparison.OrdinalIgnoreCase))
             .ToList();
+        var app = ForegroundApp.ProcessName();
+        var (toRun, skipReason) = ApplyProfiles(matches, app);
+
+        if (PracticeMode)
+        {
+            var outcome = toRun.Count > 0 ? $"Would run \"{toRun[0].Phrase}\"" + (toRun.Count > 1 ? $" (+{toRun.Count - 1} more)" : "")
+                : skipReason ?? "No matching command";
+            Heard?.Invoke(phrase, confidence, outcome + " — practice mode, nothing ran");
+            return;
+        }
+
         Log($"Heard \"{phrase}\" ({confidence:P0})");
-        foreach (var command in matches) await Run(command);
+        if (toRun.Count == 0 && skipReason != null)
+        {
+            Log(skipReason);
+            foreach (var command in matches)
+                History.Add(new HistoryItem { CommandId = command.Id, Phrase = command.Phrase, Source = RunSource.Voice, Result = RunResult.Skipped, Confidence = confidence, Detail = skipReason });
+        }
+        Heard?.Invoke(phrase, confidence, toRun.Count > 0 ? "Ran" : skipReason ?? "No matching command");
+        foreach (var command in toRun) await RunCommandAsync(command, RunSource.Voice, confidence);
     }
 
-    private async Task Run(VoiceCommand command)
+    private void OnLowConfidence(string phrase, float confidence)
     {
+        var reason = $"below your {_data.Settings.ConfidenceThreshold:P0} minimum";
+        Heard?.Invoke(phrase, confidence, "Ignored: " + reason);
+        if (PracticeMode) return;
+        Log($"Ignored \"{phrase}\" ({confidence:P0} < threshold)");
+        var command = _data.Commands.FirstOrDefault(c => string.Equals(c.Phrase.Trim(), phrase, StringComparison.OrdinalIgnoreCase));
+        History.Add(new HistoryItem { CommandId = command?.Id, Phrase = phrase, Source = RunSource.Voice, Result = RunResult.Ignored, Confidence = confidence, Detail = "Not sure enough: " + reason });
+    }
+
+    private (List<VoiceCommand> toRun, string? skipReason) ApplyProfiles(List<VoiceCommand> matches, string? app) =>
+        ProfileRules.Choose(matches, _data.Profiles, app);
+
+    /// <summary>Runs a command and records it in History. Every way of running a command comes through here.</summary>
+    public async Task RunCommandAsync(VoiceCommand command, RunSource source, float? confidence = null)
+    {
+        var item = new HistoryItem { CommandId = command.Id, Phrase = command.Phrase, Source = source, Confidence = confidence };
         try
         {
-            await ActionExecutor.RunAsync(command);
+            item.Heard = await ActionExecutor.RunAsync(command);
+            item.Result = RunResult.Ran;
         }
         catch (Exception ex)
         {
+            item.Result = RunResult.Failed;
+            item.Detail = ex.Message;
             Log($"\"{command.Phrase}\" failed: {ex.Message}");
+        }
+        if (source != RunSource.VoiceTest) History.Add(item);
+    }
+
+    private Task Run(VoiceCommand command) => RunCommandAsync(command, RunSource.Test);
+
+    // ---- Schedules ----------------------------------------------------------------------
+
+    private readonly Scheduler _scheduler = new();
+    private readonly System.Windows.Threading.DispatcherTimer _scheduleTimer = new() { Interval = TimeSpan.FromSeconds(10) };
+
+    private async void ScheduleTimer_Tick(object? sender, EventArgs e)
+    {
+        var now = DateTime.Now;
+        foreach (var schedule in _data.Schedules.ToList())
+        {
+            if (!_scheduler.IsDue(schedule, now)) continue;
+            schedule.LastRun = now; // before running, so a slow command can't make it run twice
+            SaveSoon();
+            if (_data.Commands.FirstOrDefault(c => c.Id == schedule.CommandId) is not { } command) continue;
+            Log($"Schedule: running \"{command.Phrase}\"");
+            await RunCommandAsync(command, RunSource.Schedule);
+        }
+        UpdateScheduleStatus();
+    }
+
+    /// <summary>Refreshes the "Next: today 09:00" text on every schedule.</summary>
+    public void UpdateScheduleStatus()
+    {
+        var now = DateTime.Now;
+        foreach (var schedule in _data.Schedules)
+        {
+            schedule.Status = _scheduler.Describe(schedule, _data.Commands, now);
+            schedule.Title = _data.Commands.FirstOrDefault(c => c.Id == schedule.CommandId) is { } c ? $"“{c.Phrase}”" : "No command chosen";
         }
     }
 
@@ -324,7 +424,7 @@ public partial class MainWindow : Window
     private void MenuDuplicate_Click(object sender, RoutedEventArgs e)
     {
         if (MenuTarget(sender) is not { } original) return;
-        var copy = new VoiceCommand { Phrase = original.Phrase + " copy", Enabled = original.Enabled };
+        var copy = new VoiceCommand { Phrase = original.Phrase + " copy", Enabled = original.Enabled, ProfileId = original.ProfileId };
         foreach (var s in original.Steps)
             copy.Steps.Add(new ActionStep { Type = s.Type, Parameter = s.Parameter, Repeat = s.Repeat });
         _data.Commands.Insert(_data.Commands.IndexOf(original), copy); // just above the original
@@ -406,7 +506,20 @@ public partial class MainWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e) => SaveAll();
 
-    private void SaveAll(string message = "Saved")
+    /// <summary>Save now without restarting listening (profiles and schedules don't change what Shmoice listens for).</summary>
+    public void SaveQuietly()
+    {
+        try { CommandStore.Save(_data); } catch (Exception ex) { Log("Save failed: " + ex.Message); }
+    }
+
+    /// <summary>Save shortly, once changes pause (for edits in the Profiles and Schedules tabs).</summary>
+    public void SaveSoon()
+    {
+        _settingsDebounce.Stop();
+        _settingsDebounce.Start();
+    }
+
+    public void SaveAll(string message = "Saved")
     {
         try
         {
@@ -570,7 +683,7 @@ public partial class MainWindow : Window
     private void MakeRoomForNavButtons()
     {
         if (FindChild<System.Windows.Controls.Primitives.TabPanel>(MainTabs) is { } headers)
-            headers.Margin = new Thickness(headers.Margin.Left + 80, headers.Margin.Top, headers.Margin.Right, headers.Margin.Bottom);
+            headers.Margin = new Thickness(80, headers.Margin.Top, headers.Margin.Right, headers.Margin.Bottom);
     }
 
     private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
@@ -777,7 +890,7 @@ public partial class MainWindow : Window
 
     // ---- Misc -------------------------------------------------------------------------
 
-    private void Log(string message)
+    public void Log(string message)
     {
         LogList.Items.Insert(0, $"{DateTime.Now:HH:mm:ss}  {message}");
         while (LogList.Items.Count > 200) LogList.Items.RemoveAt(LogList.Items.Count - 1);
