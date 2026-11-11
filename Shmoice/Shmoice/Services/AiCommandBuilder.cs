@@ -19,7 +19,7 @@ public static class AiCommandBuilder
 {
     private const string Model = "claude-opus-5-5";
 
-    private static readonly string[] ActionTypeNames = Enum.GetNames<ActionType>();
+    private static readonly string[] ActionTypeNames = ActionCatalog.All.Select(a => a.Type.ToString()).ToArray();
 
     /// <summary>The action list for the prompt, built from the same catalog the app's picker uses.</summary>
     private static string DescribeActions() => string.Join("\n", ActionCatalog.All
@@ -43,6 +43,7 @@ public static class AiCommandBuilder
         Notes on specific types:
         - Prefer MediaPlay / MediaPause / Mute / Unmute / MicMute / MicUnmute over the toggles when the user says which way.
         - Prefer a dedicated type (Copy, NewTab, SnapLeft, OpenSettings…) over KeyCombo when one exists.
+        - Use OpenUrl for websites (parameter is the link, e.g. "youtube.com"); it opens in the default browser, so no Open/Wait/NewTab steps are needed first.
         - KeyCombo keys are joined by "+", e.g. "ctrl+shift+esc", "alt+tab", "f5". Modifier names: ctrl, alt, shift, win. Other keys use .NET Key names (A-Z, 0-9, F1-F24, Enter, Escape, Tab, Space, Delete, Back, Home, End, PageUp, PageDown, Left, Right, Up, Down, OemPlus, OemMinus).
         - Open: optional command-line arguments go after a "|", e.g. "chrome.exe|--incognito https://example.com". Prefer URI schemes and well-known executables (e.g. "spotify:", "ms-settings:display", "calc.exe", "https://...") over guessed install paths. Add a Wait after Open when later steps need the opened window to be ready.
         - SwitchToApp / CloseApp / ForceQuitApp only work on apps that are already running; use Open to start apps.
@@ -138,7 +139,7 @@ public static class AiCommandBuilder
         foreach (var s in root.GetProperty("steps").EnumerateArray())
         {
             // Schema guarantees the enum, but skip anything unknown rather than crash.
-            if (!Enum.TryParse<ActionType>(s.GetProperty("type").GetString(), out var type)) continue;
+            if (!Enum.TryParse<ActionType>(s.GetProperty("type").GetString(), out var type) || type == ActionType.None) continue;
             steps.Add(new ActionStep
             {
                 Type = type,

@@ -5,7 +5,8 @@
         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         xmlns:models="clr-namespace:Shmoice.Models"
         xmlns:local="clr-namespace:Shmoice"
-        Title="Shmoice" Height="720" Width="1080" MinHeight="480" MinWidth="820"
+        Title="Shmoice" Height="900" Width="1320" MinHeight="480" MinWidth="820"
+        WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBgBrush}" FontSize="13">
     <Window.Resources>
         <local:ActionLabelConverter x:Key="ActionLabel" />
@@ -260,6 +261,15 @@
                                     <Button Content="🗑" Click="DeleteCommand_Click" ToolTip="Delete selected command" Padding="10,2" />
                                 </StackPanel>
                             </Grid>
+                            <!-- Filters by phrase and by what the steps do (e.g. "volume", "spotify"). -->
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <TextBox x:Name="CommandSearch" TextChanged="CommandSearch_TextChanged" KeyDown="CommandSearch_KeyDown"
+                                         ToolTip="Search by phrase or by what the command does" />
+                                <TextBlock x:Name="CommandSearchHint" Text="Search commands…" IsHitTestVisible="False" Margin="12,0"
+                                           VerticalAlignment="Center" FontStyle="Italic" Foreground="{StaticResource MutedTextBrush}" />
+                            </Grid>
+                            <TextBlock x:Name="NoCommandMatches" DockPanel.Dock="Top" Text="No commands match." Margin="8,4"
+                                       Foreground="{StaticResource MutedTextBrush}" Visibility="Collapsed" />
                             <ListBox x:Name="CommandList" ItemsSource="{Binding Commands}" Background="Transparent" BorderThickness="0"
                                      SelectionChanged="CommandList_SelectionChanged" KeyDown="CommandList_KeyDown">
                                 <ListBox.ItemContainerStyle>

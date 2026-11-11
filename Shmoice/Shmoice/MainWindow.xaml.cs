@@ -18,6 +18,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // Start big, but never bigger than the screen (e.g. on a small laptop).
+        var area = SystemParameters.WorkArea;
+        Width = Math.Max(MinWidth, Math.Min(Width, area.Width * 0.94));
+        Height = Math.Max(MinHeight, Math.Min(Height, area.Height * 0.94));
         _data = CommandStore.Load();
         DataContext = _data;
 
@@ -159,9 +163,14 @@ public partial class MainWindow : Window
 
     private void AddCommand_Click(object sender, RoutedEventArgs e)
     {
+        ClearSearch(); // so the new command is visible
+        // Save edits to the command you were on first, so the log reads sensibly.
+        if (CommandStore.HasUnsavedChanges(_data)) SaveAll();
         var command = new VoiceCommand { Phrase = "new command", Steps = { new ActionStep() } };
         _data.Commands.Insert(0, command); // newest first
-        CommandList.SelectedItem = command;
+        _suppressAutoSave = true;
+        try { CommandList.SelectedItem = command; }
+        finally { _suppressAutoSave = false; }
         CommandList.ScrollIntoView(command);
     }
 
@@ -196,11 +205,17 @@ public partial class MainWindow : Window
             if (dontAskAgain) _data.Settings.ConfirmDelete = false;
         }
 
-        var index = _data.Commands.IndexOf(command);
-        _data.Commands.Remove(command);
-        // Keep a selection so the editor doesn't go blank: pick the item that took its place.
-        if (_data.Commands.Count > 0)
-            CommandList.SelectedIndex = Math.Min(index, _data.Commands.Count - 1);
+        // Index in the list as shown (it may be filtered by the search box).
+        var index = CommandList.Items.IndexOf(command);
+        _suppressAutoSave = true;
+        try
+        {
+            _data.Commands.Remove(command);
+            // Keep a selection so the editor doesn't go blank: pick the item that took its place.
+            if (CommandList.Items.Count > 0)
+                CommandList.SelectedIndex = Math.Clamp(index, 0, CommandList.Items.Count - 1);
+        }
+        finally { _suppressAutoSave = false; }
         SaveAll();
         Log($"Deleted \"{command.Phrase}\"");
     }
@@ -329,12 +344,12 @@ public partial class MainWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e) => SaveAll();
 
-    private void SaveAll()
+    private void SaveAll(string message = "Saved")
     {
         try
         {
             CommandStore.Save(_data);
-            Log("Saved");
+            Log(message);
             RefreshListening();
         }
         catch (Exception ex)
@@ -343,8 +358,50 @@ public partial class MainWindow : Window
         }
     }
 
-    private void CommandList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e) =>
+    private bool _suppressAutoSave;
+
+    /// <summary>Switching to another command saves any edits made to the one you were on.</summary>
+    private void CommandList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
         UpdateEditorState();
+        if (_suppressAutoSave || e.RemovedItems.Count == 0 || !CommandStore.HasUnsavedChanges(_data)) return;
+        var previous = e.RemovedItems[0] as VoiceCommand;
+        SaveAll(previous != null ? $"Saved changes to \"{previous.Phrase}\"" : "Saved changes");
+    }
+
+    // ---- Search -----------------------------------------------------------------------
+
+    private void CommandSearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var words = CommandSearch.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_data.Commands);
+        view.Filter = words.Length == 0 ? null : item => item is VoiceCommand c && Matches(c, words);
+
+        CommandSearchHint.Visibility = CommandSearch.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoCommandMatches.Visibility = !view.IsEmpty || _data.Commands.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        // If the open command was filtered out, show the first match instead of a blank editor.
+        if (Selected == null && !view.IsEmpty) CommandList.SelectedIndex = 0;
+    }
+
+    /// <summary>Every word must appear in the phrase or in a step (its action name or parameter).</summary>
+    private static bool Matches(VoiceCommand command, string[] words)
+    {
+        var text = command.Phrase + " " + string.Join(" ", command.Steps.Select(s =>
+        {
+            var info = ActionCatalog.Get(s.Type);
+            return $"{info.Label} {info.Category} {s.Parameter}";
+        }));
+        return words.All(w => text.Contains(w, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void CommandSearch_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape) return;
+        ClearSearch();
+        e.Handled = true;
+    }
+
+    private void ClearSearch() => CommandSearch.Text = "";
 
     private void UpdateEditorState()
     {
@@ -462,6 +519,7 @@ public partial class MainWindow : Window
         ClearDraft();
         AiPrompt.Clear();
         AiStatus.Text = "";
+        ClearSearch(); // so the new command is visible
         _data.Commands.Insert(0, command); // newest first
         SaveAll();
         MainTabs.SelectedIndex = 0;

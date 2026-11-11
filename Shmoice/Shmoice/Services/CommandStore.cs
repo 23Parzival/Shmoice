@@ -17,7 +17,17 @@ public static class CommandStore
         Converters = { new JsonStringEnumConverter() },
     };
 
+    /// <summary>The JSON as it is on disk, to tell whether there are unsaved edits.</summary>
+    private static string? _lastSaved;
+
     public static AppData Load()
+    {
+        var data = LoadOrDefaults();
+        _lastSaved = File.Exists(FilePath) ? JsonSerializer.Serialize(data, Options) : null;
+        return data;
+    }
+
+    private static AppData LoadOrDefaults()
     {
         if (!File.Exists(FilePath)) return CreateDefaults();
         try
@@ -37,14 +47,23 @@ public static class CommandStore
     public static void Save(AppData data)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
+        var json = JsonSerializer.Serialize(data, Options);
         var tmp = FilePath + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(data, Options));
+        File.WriteAllText(tmp, json);
         File.Move(tmp, FilePath, overwrite: true);
+        _lastSaved = json;
     }
+
+    /// <summary>True if anything has changed since the last load or save.</summary>
+    public static bool HasUnsavedChanges(AppData data) => JsonSerializer.Serialize(data, Options) != _lastSaved;
 
     /// <summary>Brings files saved by older versions up to the current format. Saved on the next Save.</summary>
     private static void Upgrade(AppData data)
     {
+        // Older versions kept the parameter when switching to an action that doesn't use one.
+        foreach (var step in data.Commands.SelectMany(c => c.Steps).Where(s => !s.NeedsParameter && s.Parameter.Length > 0))
+            step.Parameter = "";
+
         if (data.Version < 2)
         {
             // Wait used to be milliseconds; it's now seconds. "1500" -> "1.5".

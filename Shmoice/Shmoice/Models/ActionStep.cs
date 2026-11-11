@@ -7,6 +7,9 @@ namespace Shmoice.Models;
 /// </summary>
 public enum ActionType
 {
+    /// <summary>No action picked yet (new steps start like this). Skipped when the command runs.</summary>
+    None,
+
     // Media
     MediaPlay, MediaPause, MediaPlayPause, MediaNext, MediaPrevious, MediaStop,
 
@@ -21,16 +24,21 @@ public enum ActionType
     ScrollUp, ScrollDown, ScrollLeft, ScrollRight, MoveMouseTo,
 
     // Browser
-    SearchWeb, SearchYouTube, NewTab, CloseTab, ReopenTab, NextTab, PreviousTab,
+    OpenUrl, SearchWeb, SearchYouTube, NewTab, CloseTab, ReopenTab, NextTab, PreviousTab,
     BrowserBack, BrowserForward, Refresh, ZoomIn, ZoomOut, ZoomReset,
 
-    // Apps & windows
-    Open, SwitchToApp, CloseApp, ForceQuitApp, CloseWindow, MinimizeWindow, MaximizeWindow,
-    SnapLeft, SnapRight, MoveToNextMonitor, SwitchWindow, TaskView, ShowDesktop,
+    // Apps
+    Open, SwitchToApp, CloseApp, ForceQuitApp,
 
-    // Windows
+    // Window controls
+    CloseWindow, MinimizeWindow, MaximizeWindow, SnapLeft, SnapRight, MoveToNextMonitor, SwitchWindow, TaskView, ShowDesktop,
+
+    // Virtual desktops
+    NewDesktop, NextDesktop, PreviousDesktop,
+
+    // System
     StartMenu, WindowsSearch, OpenSettings, FileExplorer, TaskManager, Notifications, QuickSettings,
-    ClipboardHistory, EmojiPanel, SnipArea, Screenshot, NewDesktop, NextDesktop, PreviousDesktop, ToggleDarkMode,
+    ClipboardHistory, EmojiPanel, SnipArea, Screenshot, ToggleDarkMode,
 
     // Power
     LockPC, Sleep, DisplayOff, ShutDown, Restart, CancelShutdown,
@@ -50,7 +58,8 @@ public record ActionInfo(ActionType Type, string Category, string Label, string 
 public static class ActionCatalog
 {
     private const string Media = "Media", Audio = "Volume & audio", Keys = "Keyboard & text", Mouse = "Mouse",
-        Browser = "Browser", Apps = "Apps & windows", Windows = "Windows", Power = "Power", Other = "Other";
+        Browser = "Browser", Apps = "Apps", Window = "Window controls", Desktops = "Virtual desktops",
+        Sys = "System", Power = "Power", Other = "Other";
 
     /// <summary>Every action, in the order shown in the picker.</summary>
     public static IReadOnlyList<ActionInfo> All { get; } =
@@ -96,6 +105,8 @@ public static class ActionCatalog
         new(ActionType.MoveMouseTo, Mouse, "Move mouse to…", "Moves the pointer to a screen position in pixels, from the top-left of the main screen.",
             ParamKind.Text, "x, y   e.g. 960, 540"),
 
+        new(ActionType.OpenUrl, Browser, "Open website", "Opens a link in your default browser (in a new tab if it's already open).",
+            ParamKind.Text, "Link, e.g. youtube.com or https://example.com/page"),
         new(ActionType.SearchWeb, Browser, "Search the web", "Opens a Google search for the text in your browser.", ParamKind.Text, "What to search for"),
         new(ActionType.SearchYouTube, Browser, "Search YouTube", "Opens a YouTube search for the text.", ParamKind.Text, "What to search for"),
         new(ActionType.NewTab, Browser, "New tab", "Opens a new tab (Ctrl+T).", Combo: "ctrl+t"),
@@ -118,31 +129,32 @@ public static class ActionCatalog
             ParamKind.Text, "App name, e.g. notepad, spotify"),
         new(ActionType.ForceQuitApp, Apps, "Force quit app", "Ends an app immediately, like Task Manager's End task. Unsaved work is lost.",
             ParamKind.Text, "App name, e.g. notepad"),
-        new(ActionType.CloseWindow, Apps, "Close current window", "Closes the window you're using."),
-        new(ActionType.MinimizeWindow, Apps, "Minimize current window", "Minimizes the window you're using."),
-        new(ActionType.MaximizeWindow, Apps, "Maximize / restore window", "Maximizes the window you're using, or restores it if it's already maximized."),
-        new(ActionType.SnapLeft, Apps, "Snap window left", "Snaps the current window to the left half (Win+Left).", Combo: "win+left"),
-        new(ActionType.SnapRight, Apps, "Snap window right", "Snaps the current window to the right half (Win+Right).", Combo: "win+right"),
-        new(ActionType.MoveToNextMonitor, Apps, "Move window to other monitor", "Moves the current window to the next monitor (Win+Shift+Right).", Combo: "win+shift+right"),
-        new(ActionType.SwitchWindow, Apps, "Switch to last window", "Goes back to the window you used before (Alt+Tab).", Combo: "alt+tab"),
-        new(ActionType.TaskView, Apps, "Task view", "Shows all open windows (Win+Tab).", Combo: "win+tab"),
-        new(ActionType.ShowDesktop, Apps, "Show desktop", "Minimizes everything (Win+D). Run again to bring it back.", Combo: "win+d"),
+        new(ActionType.CloseWindow, Window, "Close current window", "Closes the window you're using."),
+        new(ActionType.MinimizeWindow, Window, "Minimize current window", "Minimizes the window you're using."),
+        new(ActionType.MaximizeWindow, Window, "Maximize / restore window", "Maximizes the window you're using, or restores it if it's already maximized."),
+        new(ActionType.SnapLeft, Window, "Snap window left", "Snaps the current window to the left half (Win+Left).", Combo: "win+left"),
+        new(ActionType.SnapRight, Window, "Snap window right", "Snaps the current window to the right half (Win+Right).", Combo: "win+right"),
+        new(ActionType.MoveToNextMonitor, Window, "Move window to other monitor", "Moves the current window to the next monitor (Win+Shift+Right).", Combo: "win+shift+right"),
+        new(ActionType.SwitchWindow, Window, "Switch to last window", "Goes back to the window you used before (Alt+Tab).", Combo: "alt+tab"),
+        new(ActionType.TaskView, Window, "Task view", "Shows all open windows (Win+Tab).", Combo: "win+tab"),
+        new(ActionType.ShowDesktop, Window, "Show desktop", "Minimizes everything (Win+D). Run again to bring it back.", Combo: "win+d"),
 
-        new(ActionType.StartMenu, Windows, "Open Start menu", "Opens the Start menu.", Combo: "win"),
-        new(ActionType.WindowsSearch, Windows, "Open search", "Opens Windows search (Win+S).", Combo: "win+s"),
-        new(ActionType.OpenSettings, Windows, "Open Settings", "Opens Windows Settings (Win+I).", Combo: "win+i"),
-        new(ActionType.FileExplorer, Windows, "Open File Explorer", "Opens File Explorer (Win+E).", Combo: "win+e"),
-        new(ActionType.TaskManager, Windows, "Open Task Manager", "Opens Task Manager (Ctrl+Shift+Esc).", Combo: "ctrl+shift+esc"),
-        new(ActionType.Notifications, Windows, "Open notifications", "Opens the notification center (Win+N).", Combo: "win+n"),
-        new(ActionType.QuickSettings, Windows, "Open quick settings", "Opens quick settings: Wi-Fi, Bluetooth and more (Win+A).", Combo: "win+a"),
-        new(ActionType.ClipboardHistory, Windows, "Clipboard history", "Shows clipboard history (Win+V).", Combo: "win+v"),
-        new(ActionType.EmojiPanel, Windows, "Emoji panel", "Opens the emoji picker (Win+.).", Combo: "win+oemperiod"),
-        new(ActionType.SnipArea, Windows, "Snip part of the screen", "Starts the Snipping Tool so you can pick an area (Win+Shift+S).", Combo: "win+shift+s"),
-        new(ActionType.Screenshot, Windows, "Screenshot (whole screen)", "Saves a picture of all your screens to Pictures\\Screenshots."),
-        new(ActionType.NewDesktop, Windows, "New virtual desktop", "Creates a new virtual desktop (Win+Ctrl+D).", Combo: "win+ctrl+d"),
-        new(ActionType.NextDesktop, Windows, "Next virtual desktop", "Switches to the next virtual desktop (Win+Ctrl+Right).", Combo: "win+ctrl+right"),
-        new(ActionType.PreviousDesktop, Windows, "Previous virtual desktop", "Switches to the previous virtual desktop (Win+Ctrl+Left).", Combo: "win+ctrl+left"),
-        new(ActionType.ToggleDarkMode, Windows, "Toggle dark mode", "Switches Windows between light and dark mode."),
+        new(ActionType.NewDesktop, Desktops, "New virtual desktop", "Creates a new virtual desktop (Win+Ctrl+D).", Combo: "win+ctrl+d"),
+        new(ActionType.NextDesktop, Desktops, "Next virtual desktop", "Switches to the next virtual desktop (Win+Ctrl+Right).", Combo: "win+ctrl+right"),
+        new(ActionType.PreviousDesktop, Desktops, "Previous virtual desktop", "Switches to the previous virtual desktop (Win+Ctrl+Left).", Combo: "win+ctrl+left"),
+
+        new(ActionType.StartMenu, Sys, "Open Start menu", "Opens the Start menu.", Combo: "win"),
+        new(ActionType.WindowsSearch, Sys, "Open search", "Opens Windows search (Win+S).", Combo: "win+s"),
+        new(ActionType.OpenSettings, Sys, "Open Settings", "Opens Windows Settings (Win+I).", Combo: "win+i"),
+        new(ActionType.FileExplorer, Sys, "Open File Explorer", "Opens File Explorer (Win+E).", Combo: "win+e"),
+        new(ActionType.TaskManager, Sys, "Open Task Manager", "Opens Task Manager (Ctrl+Shift+Esc).", Combo: "ctrl+shift+esc"),
+        new(ActionType.Notifications, Sys, "Open notifications", "Opens the notification center (Win+N).", Combo: "win+n"),
+        new(ActionType.QuickSettings, Sys, "Open quick settings", "Opens quick settings: Wi-Fi, Bluetooth and more (Win+A).", Combo: "win+a"),
+        new(ActionType.ClipboardHistory, Sys, "Clipboard history", "Shows clipboard history (Win+V).", Combo: "win+v"),
+        new(ActionType.EmojiPanel, Sys, "Emoji panel", "Opens the emoji picker (Win+.).", Combo: "win+oemperiod"),
+        new(ActionType.SnipArea, Sys, "Snip part of the screen", "Starts the Snipping Tool so you can pick an area (Win+Shift+S).", Combo: "win+shift+s"),
+        new(ActionType.Screenshot, Sys, "Screenshot (whole screen)", "Saves a picture of all your screens to Pictures\\Screenshots."),
+        new(ActionType.ToggleDarkMode, Sys, "Toggle dark mode", "Switches Windows between light and dark mode."),
 
         new(ActionType.LockPC, Power, "Lock PC", "Locks the PC."),
         new(ActionType.Sleep, Power, "Sleep", "Puts the PC to sleep."),
@@ -162,8 +174,11 @@ public static class ActionCatalog
 
     private static readonly Dictionary<ActionType, ActionInfo> ByType = All.ToDictionary(a => a.Type);
 
+    /// <summary>A step with no action chosen yet. Not listed in the picker.</summary>
+    public static ActionInfo None { get; } = new(ActionType.None, "", "", "", Hint: "Choose an action first");
+
     public static ActionInfo Get(ActionType type) =>
-        ByType.TryGetValue(type, out var info) ? info : new ActionInfo(type, Other, type.ToString(), "");
+        ByType.TryGetValue(type, out var info) ? info : type == ActionType.None ? None : new ActionInfo(type, Other, type.ToString(), "");
 }
 
 public class ActionStep : ObservableObject
@@ -177,7 +192,11 @@ public class ActionStep : ObservableObject
         get => _type;
         set
         {
+            var oldKind = ParameterKind;
             if (!Set(ref _type, value)) return;
+            // A leftover parameter would be misleading (e.g. a URL on "New tab"), so clear it when the
+            // new action takes no parameter or a different kind. Same kind (e.g. two app names) is kept.
+            if (ParameterKind == ParamKind.None || ParameterKind != oldKind) Parameter = "";
             OnPropertyChanged(nameof(NeedsParameter));
             OnPropertyChanged(nameof(ParameterKind));
             OnPropertyChanged(nameof(ParameterHint));

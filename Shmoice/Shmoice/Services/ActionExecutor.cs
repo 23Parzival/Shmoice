@@ -22,6 +22,8 @@ public static class ActionExecutor
 
     private static async Task RunStepAsync(ActionStep step)
     {
+        if (step.Type == ActionType.None) return; // no action chosen yet
+
         // Many actions are just a fixed keyboard shortcut.
         if (ActionCatalog.Get(step.Type).Combo is { } combo)
         {
@@ -64,6 +66,7 @@ public static class ActionExecutor
             case ActionType.ScrollLeft: Send([MouseInput(MOUSEEVENTF_HWHEEL, -WHEEL_DELTA)]); break;
             case ActionType.ScrollRight: Send([MouseInput(MOUSEEVENTF_HWHEEL, WHEEL_DELTA)]); break;
             case ActionType.MoveMouseTo: SystemActions.MoveMouseTo(p); break;
+            case ActionType.OpenUrl: OpenUrl(p); break;
             case ActionType.SearchWeb: Search("https://www.google.com/search?q=", p); break;
             case ActionType.SearchYouTube: Search("https://www.youtube.com/results?search_query=", p); break;
             case ActionType.Open: Open(p); break;
@@ -101,6 +104,20 @@ public static class ActionExecutor
             throw new ArgumentException($"Wait needs a number of seconds, e.g. 1.5 (got \"{text}\").");
         return Math.Clamp(seconds, 0, 600);
     }
+
+    /// <summary>Opens a web link in the default browser; "twitch.tv/x" becomes "https://twitch.tv/x".</summary>
+    public static string NormalizeUrl(string text)
+    {
+        var url = text.Trim();
+        if (url.Length == 0) throw new ArgumentException("Enter a link to open, e.g. youtube.com.");
+        if (!url.Contains("://")) url = "https://" + url;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || uri.Host.Length == 0)
+            throw new ArgumentException($"\"{text.Trim()}\" isn't a web link. Use something like youtube.com or https://example.com.");
+        return uri.AbsoluteUri;
+    }
+
+    private static void OpenUrl(string text) =>
+        Process.Start(new ProcessStartInfo { FileName = NormalizeUrl(text), UseShellExecute = true });
 
     private static void Search(string baseUrl, string query)
     {

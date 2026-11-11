@@ -56,8 +56,18 @@ public partial class ActionPicker : UserControl
 
     private void UpdateLabel()
     {
+        if (SelectedType == ActionType.None)
+        {
+            LabelText.Text = "Choose an action…";
+            LabelText.FontStyle = FontStyles.Italic;
+            LabelText.Foreground = (Brush)FindResource("MutedTextBrush");
+            OpenButton.ToolTip = "Pick what this step does";
+            return;
+        }
         var info = ActionCatalog.Get(SelectedType);
         LabelText.Text = info.Label;
+        LabelText.ClearValue(TextBlock.FontStyleProperty);
+        LabelText.ClearValue(TextBlock.ForegroundProperty);
         OpenButton.ToolTip = $"{info.Category} › {info.Label}\n{info.Description}";
     }
 
@@ -90,7 +100,7 @@ public partial class ActionPicker : UserControl
 
     // ---- Tree contents ----------------------------------------------------------------
 
-    /// <summary>Fills the tree. With no filter, only the current action's category is open.</summary>
+    /// <summary>Fills the tree. With no filter every category starts closed; a search opens all matches.</summary>
     private void Build(string filter)
     {
         var words = filter.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -106,10 +116,10 @@ public partial class ActionPicker : UserControl
                 if (!words.All(w => text.Contains(w, StringComparison.OrdinalIgnoreCase))) continue;
                 var node = new ActionNode(info);
                 category.Items.Add(node);
-                if (words.Length == 0 ? info.Type == SelectedType : toSelect == null) toSelect = node;
+                if (words.Length > 0 && toSelect == null) toSelect = node; // Enter picks the first match
             }
             if (category.Items.Count == 0) continue;
-            category.IsExpanded = words.Length > 0 || category.Items.Contains(toSelect!);
+            category.IsExpanded = words.Length > 0;
             _categories.Add(category);
         }
 
