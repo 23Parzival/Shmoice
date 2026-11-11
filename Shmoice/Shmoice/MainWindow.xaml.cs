@@ -38,7 +38,14 @@ public partial class MainWindow : Window
         // Always listening: start as soon as the window is up, and restart when settings change.
         _settingsDebounce.Tick += SettingsDebounce_Tick;
         _data.Settings.PropertyChanged += Settings_PropertyChanged;
-        Loaded += (_, _) => RefreshListening();
+        Loaded += (_, _) =>
+        {
+            MakeRoomForNavButtons();
+            RefreshListening();
+            RecordNavigation(); // the starting point for Back
+            _editWatch.Tick += EditWatch_Tick;
+            _editWatch.Start();
+        };
     }
 
     private VoiceCommand? Selected => CommandList.SelectedItem as VoiceCommand;
@@ -112,10 +119,18 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Wake word / confidence edits restart listening once typing pauses.</summary>
+    private bool _listeningSettingsChanged;
+
+    /// <summary>
+    /// Settings in the header save once you stop changing them. Wake word / confidence also restart
+    /// listening; the chime volume doesn't need to.
+    /// </summary>
     private void Settings_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is not (nameof(AppSettings.WakeWord) or nameof(AppSettings.ConfidenceThreshold))) return;
+        if (e.PropertyName is nameof(AppSettings.WakeWord) or nameof(AppSettings.ConfidenceThreshold))
+            _listeningSettingsChanged = true;
+        else if (e.PropertyName != nameof(AppSettings.ChimeVolume))
+            return;
         _settingsDebounce.Stop();
         _settingsDebounce.Start();
     }
@@ -124,7 +139,18 @@ public partial class MainWindow : Window
     {
         _settingsDebounce.Stop();
         try { CommandStore.Save(_data); } catch (Exception ex) { Log("Save failed: " + ex.Message); }
+        if (!_listeningSettingsChanged) return;
+        _listeningSettingsChanged = false;
         RefreshListening();
+    }
+
+    /// <summary>Lets you hear the chime volume you just picked.</summary>
+    private void ChimeSlider_Released(object sender, RoutedEventArgs e)
+    {
+        // Keyboard: only the keys that move the slider (not e.g. Tab leaving it).
+        if (e is KeyEventArgs k && k.Key is not (Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown))
+            return;
+        Chime.Play(_data.Settings.ChimeVolume);
     }
 
     private IEnumerable<string> EnabledPhrases() =>
@@ -169,7 +195,7 @@ public partial class MainWindow : Window
         });
         try
         {
-            Chime.Play();
+            Chime.Play(_data.Settings.ChimeVolume);
             await Task.Delay(350); // let the chime finish so it isn't heard as speech
             var words = await _listener.ListenForWordsAsync(startTimeout);
             await Dispatcher.InvokeAsync(() => Log(words.Length > 0 ? $"Heard \"{words}\"" : "Didn't hear anything"));
@@ -252,6 +278,7 @@ public partial class MainWindow : Window
         }
         finally { _suppressAutoSave = false; }
         SaveAll();
+        UpdateNavButtons(); // it may have been the only place to go back to
         Log($"Deleted \"{command.Phrase}\"");
     }
 
@@ -399,9 +426,194 @@ public partial class MainWindow : Window
     private void CommandList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         UpdateEditorState();
+        RecordNavigation();
         if (_suppressAutoSave || e.RemovedItems.Count == 0 || !CommandStore.HasUnsavedChanges(_data)) return;
         var previous = e.RemovedItems[0] as VoiceCommand;
         SaveAll(previous != null ? $"Saved changes to \"{previous.Phrase}\"" : "Saved changes");
+    }
+
+    // ---- Back / forward --------------------------------------------------------------
+
+    // One timeline for both where you were and what you changed, like a browser crossed with undo:
+    // every entry is a place (tab + open command) plus a snapshot of all commands at that moment.
+    // Back over a place switches to it; back over an edit (adding a step, renaming, deleting a
+    // command…) restores the commands as they were. Making a change after going back drops the
+    // "forward" entries, like a browser.
+
+    private sealed record HistoryEntry(int Tab, Guid? CommandId, string Snapshot);
+
+    private readonly List<HistoryEntry> _history = new();
+    private int _historyIndex = -1;
+    private bool _navigating;
+    private string? _pendingSnapshot; // a change seen on the last tick, waiting to settle
+    private readonly System.Windows.Threading.DispatcherTimer _editWatch = new() { Interval = TimeSpan.FromMilliseconds(150) };
+
+    private HistoryEntry? Current => _historyIndex >= 0 ? _history[_historyIndex] : null;
+
+    private string Snapshot() => CommandStore.SnapshotCommands(_data.Commands);
+
+    private void AddEntry(int tab, Guid? commandId, string snapshot)
+    {
+        // Skip in-between states while the window loads or the list refreshes (no tab, or Commands with nothing open).
+        if (_navigating || tab < 0 || (tab == 0 && commandId == null)) return;
+        if (Current is { } c && c.Tab == tab && c.CommandId == commandId && c.Snapshot == snapshot) return;
+        _history.RemoveRange(_historyIndex + 1, _history.Count - _historyIndex - 1);
+        _history.Add(new HistoryEntry(tab, commandId, snapshot));
+        if (_history.Count > 200) _history.RemoveAt(0);
+        _historyIndex = _history.Count - 1;
+        UpdateNavButtons();
+    }
+
+    /// <summary>If the commands changed since the last entry, record that change where it was made.</summary>
+    private void FlushEdits()
+    {
+        _pendingSnapshot = null;
+        if (Current is not { } c || _navigating) return;
+        var snapshot = Snapshot();
+        if (snapshot == c.Snapshot) return;
+        // If the change deleted the command you were on, record it where you are now instead.
+        if (c.CommandId is { } id && _data.Commands.All(x => x.Id != id))
+            AddEntry(MainTabs.SelectedIndex, MainTabs.SelectedIndex == 0 ? Selected?.Id : null, snapshot);
+        else
+            AddEntry(c.Tab, c.CommandId, snapshot);
+    }
+
+    /// <summary>You opened another command or tab.</summary>
+    private void RecordNavigation()
+    {
+        if (_navigating || _data == null) return;
+        FlushEdits();
+        AddEntry(MainTabs.SelectedIndex, MainTabs.SelectedIndex == 0 ? Selected?.Id : null, Snapshot());
+    }
+
+    /// <summary>
+    /// Edits are picked up once they've settled for a moment, so typing a phrase becomes one step
+    /// back rather than one per letter.
+    /// </summary>
+    private void EditWatch_Tick(object? sender, EventArgs e)
+    {
+        if (_navigating || Current is not { } c) return;
+        var snapshot = Snapshot();
+        if (snapshot == c.Snapshot) { _pendingSnapshot = null; return; }
+        // Back can undo this right away (it records the change first), so don't make you wait for it.
+        BackButton.IsEnabled = true;
+        ForwardButton.IsEnabled = false; // a new change replaces anything you could go forward to
+        if (snapshot != _pendingSnapshot) { _pendingSnapshot = snapshot; _stableTicks = 0; return; } // still changing
+        if (++_stableTicks >= 3) FlushEdits(); // unchanged for ~0.6 s
+    }
+
+    private int _stableTicks;
+
+    private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // SelectionChanged bubbles up from lists inside the tabs; only react to the tabs themselves.
+        if (e.Source != MainTabs) return;
+        RecordNavigation();
+    }
+
+    /// <summary>The nearest entry in that direction that's different from where you are now.</summary>
+    private int FindTarget(int direction)
+    {
+        if (Current is not { } c) return -1;
+        for (var i = _historyIndex + direction; i >= 0 && i < _history.Count; i += direction)
+            if (_history[i] != c) return i;
+        return -1;
+    }
+
+    private void Navigate(int direction)
+    {
+        FlushEdits(); // an edit you just made (e.g. a step added by mistake) is the first thing Back undoes
+        _stableTicks = 0;
+        var target = FindTarget(direction);
+        if (target < 0) return;
+        var entry = _history[target];
+        var restore = entry.Snapshot != Snapshot();
+        var phrasesBefore = string.Join("\n", EnabledPhrases());
+        _historyIndex = target;
+        _navigating = true;
+        _suppressAutoSave = true;
+        try
+        {
+            if (restore)
+            {
+                _data.Commands.Clear();
+                foreach (var command in CommandStore.RestoreCommands(entry.Snapshot)) _data.Commands.Add(command);
+            }
+            MainTabs.SelectedIndex = entry.Tab;
+            if (entry.CommandId is { } id && _data.Commands.FirstOrDefault(c => c.Id == id) is { } open)
+            {
+                if (!CommandList.Items.Contains(open)) ClearSearch(); // hidden by the search box
+                CommandList.SelectedItem = open;
+                CommandList.ScrollIntoView(open);
+            }
+        }
+        finally
+        {
+            _navigating = false;
+            _suppressAutoSave = false;
+        }
+
+        if (restore)
+        {
+            // Keep the file and the listener in step with what's on screen.
+            try { CommandStore.Save(_data); } catch (Exception ex) { Log("Save failed: " + ex.Message); }
+            if (string.Join("\n", EnabledPhrases()) != phrasesBefore) RefreshListening();
+            Log(direction < 0 ? "Undid a change" : "Redid a change");
+        }
+        UpdateNavButtons();
+    }
+
+    /// <summary>
+    /// The back / forward buttons sit where the tab headers start, so shift the row of tab headers
+    /// right by their width. (The theme ignores a margin set on the first tab itself.)
+    /// </summary>
+    private void MakeRoomForNavButtons()
+    {
+        if (FindChild<System.Windows.Controls.Primitives.TabPanel>(MainTabs) is { } headers)
+            headers.Margin = new Thickness(headers.Margin.Left + 80, headers.Margin.Top, headers.Margin.Right, headers.Margin.Bottom);
+    }
+
+    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match) return match;
+            if (FindChild<T>(child) is { } deeper) return deeper;
+        }
+        return null;
+    }
+
+    private void UpdateNavButtons()
+    {
+        if (BackButton == null || _data == null) return; // still loading
+        BackButton.IsEnabled = FindTarget(-1) >= 0;
+        ForwardButton.IsEnabled = FindTarget(1) >= 0;
+    }
+
+    private void Back_Click(object sender, RoutedEventArgs e) => Navigate(-1);
+    private void Forward_Click(object sender, RoutedEventArgs e) => Navigate(1);
+
+    /// <summary>Alt+Left / Alt+Right, like a browser.</summary>
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Alt && e.Key == Key.System && e.SystemKey is Key.Left or Key.Right)
+        {
+            Navigate(e.SystemKey == Key.Left ? -1 : 1);
+            e.Handled = true;
+        }
+        base.OnPreviewKeyDown(e);
+    }
+
+    /// <summary>The back / forward buttons on the side of many mice.</summary>
+    protected override void OnPreviewMouseDown(MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton is MouseButton.XButton1 or MouseButton.XButton2)
+        {
+            Navigate(e.ChangedButton == MouseButton.XButton1 ? -1 : 1);
+            e.Handled = true;
+        }
+        base.OnPreviewMouseDown(e);
     }
 
     // ---- Search -----------------------------------------------------------------------

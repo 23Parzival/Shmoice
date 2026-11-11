@@ -8,6 +8,9 @@ public class VoiceCommand : ObservableObject
     private string _phrase = "";
     private bool _enabled = true;
 
+    /// <summary>Stable identity, so back / forward can find a command again after restoring an earlier version.</summary>
+    public Guid Id { get; set; } = Guid.NewGuid();
+
     public string Phrase { get => _phrase; set => Set(ref _phrase, value ?? ""); }
 
     public bool Enabled { get => _enabled; set => Set(ref _enabled, value); }
@@ -36,6 +39,11 @@ public class AppSettings : ObservableObject
 
     /// <summary>Name of the microphone to listen on. Empty = Windows default.</summary>
     public string InputDeviceName { get; set; } = "";
+
+    private double _chimeVolume = 0.6;
+
+    /// <summary>0..1 volume of the "go ahead" chime played by Listen for words. 0 = silent.</summary>
+    public double ChimeVolume { get => _chimeVolume; set => Set(ref _chimeVolume, Math.Clamp(value, 0, 1)); }
 }
 
 /// <summary>Everything persisted to disk.</summary>

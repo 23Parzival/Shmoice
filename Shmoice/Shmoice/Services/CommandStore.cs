@@ -54,6 +54,12 @@ public static class CommandStore
         _lastSaved = json;
     }
 
+    /// <summary>The commands as JSON: a snapshot for back / forward to return to.</summary>
+    public static string SnapshotCommands(IEnumerable<VoiceCommand> commands) => JsonSerializer.Serialize(commands, Options);
+
+    public static List<VoiceCommand> RestoreCommands(string snapshot) =>
+        JsonSerializer.Deserialize<List<VoiceCommand>>(snapshot, Options) ?? new();
+
     /// <summary>True if anything has changed since the last load or save.</summary>
     public static bool HasUnsavedChanges(AppData data) => JsonSerializer.Serialize(data, Options) != _lastSaved;
 

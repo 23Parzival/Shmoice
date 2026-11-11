@@ -242,7 +242,8 @@
         </Grid>
 
         <!-- ===== Main tabs ===== -->
-        <TabControl x:Name="MainTabs" Grid.Row="2" Background="Transparent" BorderThickness="0">
+        <TabControl x:Name="MainTabs" Grid.Row="2" Background="Transparent" BorderThickness="0"
+                    SelectionChanged="MainTabs_SelectionChanged">
             <TabItem Header="Commands">
                 <Grid Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
@@ -472,6 +473,15 @@
             </TabItem>
         </TabControl>
 
+        <!-- ===== Back / forward through the commands and tabs you've viewed, like a browser ===== -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Height="38">
+            <Button x:Name="BackButton" Content="‹" Click="Back_Click" Width="34" Height="30" Padding="0,0,0,3"
+                    FontSize="20" Margin="0,0,4,0" IsEnabled="False"
+                    ToolTip="Back: undo your last change, or go back to the last command you had open (Alt+Left)" />
+            <Button x:Name="ForwardButton" Content="›" Click="Forward_Click" Width="34" Height="30" Padding="0,0,0,3"
+                    FontSize="20" IsEnabled="False" ToolTip="Forward: redo, or go forward again (Alt+Right)" />
+        </StackPanel>
+
         <!-- ===== Listening settings: sit in the empty space to the right of the tab headers ===== -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Height="38">
             <TextBlock Text="Wake word" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
@@ -484,6 +494,15 @@
                     VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True"
                     ToolTip="Higher = fewer accidental triggers, but you may need to speak more clearly." />
             <TextBlock Text="{Binding Settings.ConfidenceThreshold, StringFormat={}{0:P0}}" VerticalAlignment="Center"
+                       Margin="10,0,0,0" MinWidth="36" FontWeight="SemiBold" />
+            <Rectangle Width="1" Fill="{StaticResource CardBorderBrush}" Margin="18,8" />
+            <TextBlock Text="Chime" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
+            <!-- Plays the chime when you let go, so you can hear the new volume. -->
+            <Slider x:Name="ChimeSlider" Value="{Binding Settings.ChimeVolume}" Minimum="0" Maximum="1" Width="100"
+                    VerticalAlignment="Center" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                    PreviewMouseLeftButtonUp="ChimeSlider_Released" KeyUp="ChimeSlider_Released"
+                    ToolTip="Volume of the chime that plays when Listen for words starts. All the way left turns it off." />
+            <TextBlock Text="{Binding Settings.ChimeVolume, StringFormat={}{0:P0}}" VerticalAlignment="Center"
                        Margin="10,0,0,0" MinWidth="36" FontWeight="SemiBold" />
         </StackPanel>
 
