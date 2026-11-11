@@ -25,6 +25,9 @@ public static class ActionExecutor
         switch (step.Type)
         {
             case ActionType.MediaPlayPause: Tap(VK_MEDIA_PLAY_PAUSE); break;
+            // Fall back to the toggle key only if Windows' media sessions can't be used.
+            case ActionType.MediaPlay: if (!await MediaControl.PlayAsync()) Tap(VK_MEDIA_PLAY_PAUSE); break;
+            case ActionType.MediaPause: if (!await MediaControl.PauseAsync()) Tap(VK_MEDIA_PLAY_PAUSE); break;
             case ActionType.MediaNext: Tap(VK_MEDIA_NEXT_TRACK); break;
             case ActionType.MediaPrevious: Tap(VK_MEDIA_PREV_TRACK); break;
             case ActionType.MediaStop: Tap(VK_MEDIA_STOP); break;
@@ -79,6 +82,13 @@ public static class ActionExecutor
         foreach (var raw in combo.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (Aliases.TryGetValue(raw, out var vk)) { keys.Add(vk); continue; }
+            // Raw virtual-key code, e.g. "0xC1" (the key recorder writes these for keys WPF has no name for).
+            if (raw.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
+                ushort.TryParse(raw[2..], System.Globalization.NumberStyles.HexNumber, null, out var code))
+            {
+                keys.Add(code);
+                continue;
+            }
             var name = raw.Length == 1 && char.IsDigit(raw[0]) ? "D" + raw : raw; // "1" -> Key.D1
             if (Enum.TryParse<Key>(name, ignoreCase: true, out var key) && key != Key.None)
             {

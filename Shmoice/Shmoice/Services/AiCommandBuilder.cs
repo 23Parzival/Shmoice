@@ -27,7 +27,8 @@ public static class AiCommandBuilder
         your steps before saving, then trigger them by voice.
 
         Available step types (field "type") and what "parameter" means for each:
-        - MediaPlayPause, MediaNext, MediaPrevious, MediaStop: media keys; parameter is "".
+        - MediaPlay, MediaPause: start / pause whatever media is playing (never toggles); parameter is "". Prefer these over MediaPlayPause.
+        - MediaPlayPause, MediaNext, MediaPrevious, MediaStop: media keys (MediaPlayPause toggles); parameter is "".
         - VolumeUp, VolumeDown: one press changes system volume by 2%; parameter is "". Use "repeat" for bigger changes (e.g. repeat 10 = 20%).
         - VolumeMute: toggles mute; parameter is "".
         - KeyCombo: a keyboard shortcut sent to the focused window. Keys joined by "+", e.g. "ctrl+shift+esc", "alt+tab", "win+d", "ctrl+t", "f5". Modifier names: ctrl, alt, shift, win. Other keys use .NET Key names (A-Z, 0-9, F1-F24, Enter, Escape, Tab, Space, Delete, Back, Home, End, PageUp, PageDown, Left, Right, Up, Down).

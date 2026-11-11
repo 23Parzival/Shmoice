@@ -1,0 +1,22 @@
+<UserControl x:Class="Shmoice.KeyRecorder"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Click to record, like a game's keybind setting. -->
+        <Button x:Name="RecordButton" Click="Record_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                ToolTip="Click, then press the key or combo you want (Esc to cancel)">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="⌨" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" />
+                <TextBlock x:Name="LabelText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Button>
+
+        <Button x:Name="ClearButton" Grid.Column="1" Content="✕" Click="Clear_Click" Width="34" Padding="0,4"
+                Margin="6,0,0,0" ToolTip="Clear" />
+    </Grid>
+</UserControl>

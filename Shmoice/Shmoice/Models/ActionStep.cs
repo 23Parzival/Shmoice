@@ -7,6 +7,8 @@ namespace Shmoice.Models;
 /// </summary>
 public enum ActionType
 {
+    MediaPlay,
+    MediaPause,
     MediaPlayPause,
     MediaNext,
     MediaPrevious,
@@ -33,7 +35,9 @@ public class ActionStep : ObservableObject
     /// <summary>Human-friendly names for the action dropdown.</summary>
     public static readonly IReadOnlyDictionary<ActionType, string> Labels = new Dictionary<ActionType, string>
     {
-        [ActionType.MediaPlayPause] = "Play / Pause",
+        [ActionType.MediaPlay] = "Play",
+        [ActionType.MediaPause] = "Pause",
+        [ActionType.MediaPlayPause] = "Play / Pause (toggle)",
         [ActionType.MediaNext] = "Next track",
         [ActionType.MediaPrevious] = "Previous track",
         [ActionType.MediaStop] = "Stop media",
@@ -65,7 +69,7 @@ public class ActionStep : ObservableObject
     [System.Text.Json.Serialization.JsonIgnore]
     public string ParameterHint => Type switch
     {
-        ActionType.KeyCombo => "e.g. ctrl+shift+esc, alt+tab, win+d",
+        ActionType.KeyCombo => "Click to record keys",
         ActionType.TypeText => "Text to type",
         ActionType.Open => "e.g. https://youtube.com, notepad.exe, spotify:",
         ActionType.Wait => "Seconds, e.g. 1.5",

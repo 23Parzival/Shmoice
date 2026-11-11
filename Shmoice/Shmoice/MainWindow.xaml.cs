@@ -12,6 +12,8 @@ public partial class MainWindow : Window
 {
     private readonly AppData _data;
     private readonly SpeechListener _listener = new();
+    private readonly System.Windows.Threading.DispatcherTimer _settingsDebounce =
+        new() { Interval = TimeSpan.FromMilliseconds(700) };
 
     public MainWindow()
     {
@@ -27,45 +29,97 @@ public partial class MainWindow : Window
         UpdateEditorState();
         UpdateApiKeyStatus();
         Log($"Commands loaded from {CommandStore.FilePath}");
+
+        // Always listening: start as soon as the window is up, and restart when settings change.
+        _settingsDebounce.Tick += SettingsDebounce_Tick;
+        _data.Settings.PropertyChanged += Settings_PropertyChanged;
+        Loaded += (_, _) => RefreshListening();
     }
 
     private VoiceCommand? Selected => CommandList.SelectedItem as VoiceCommand;
 
     // ---- Listening --------------------------------------------------------------------
 
-    private void ListenButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>The mic button only picks the input; listening itself is always on.</summary>
+    private void MicButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_listener.IsListening) StopListening();
-        else StartListening();
+        List<AudioInput> inputs;
+        try { inputs = AudioInputs.List(); }
+        catch (Exception ex)
+        {
+            Log("Could not list microphones: " + ex.Message);
+            return;
+        }
+
+        var chosen = InputDeviceDialog.Ask(this, inputs, _data.Settings.InputDeviceName);
+        if (chosen == null) return;
+        _data.Settings.InputDeviceName = chosen.IsDefault ? "" : chosen.Name;
+        CommandStore.Save(_data);
+        Log($"Microphone set to {chosen.Name}");
+        RefreshListening();
     }
 
-    private void StartListening()
+    /// <summary>The saved microphone, or the Windows default if it isn't connected.</summary>
+    private AudioInput SavedInput()
     {
+        var saved = _data.Settings.InputDeviceName;
+        if (saved.Length == 0) return AudioInput.WindowsDefault;
         try
         {
-            _listener.Start(EnabledPhrases(), _data.Settings.WakeWord, _data.Settings.ConfidenceThreshold);
-            SetStatus(true);
-            var wake = string.IsNullOrWhiteSpace(_data.Settings.WakeWord) ? "" : $" (say \"{_data.Settings.WakeWord.Trim()}\" first)";
-            Log($"Listening for {EnabledPhrases().Count()} command(s){wake}");
+            if (AudioInputs.List().FirstOrDefault(i => i.Name == saved) is { } match) return match;
+        }
+        catch { /* fall through to the default */ }
+        Log($"\"{saved}\" isn't connected, using the Windows default microphone");
+        return AudioInput.WindowsDefault;
+    }
+
+    /// <summary>
+    /// (Re)starts the recognizer with the current commands, wake word and mic. The grammar is
+    /// fixed when it starts, so this runs at launch and after anything that changes it.
+    /// </summary>
+    private void RefreshListening()
+    {
+        var wakeWord = _data.Settings.WakeWord.Trim();
+        if (wakeWord.Length == 0)
+        {
+            _listener.Stop();
+            SetStatus(false, "Set a wake word to listen");
+            return;
+        }
+        if (!EnabledPhrases().Any())
+        {
+            _listener.Stop();
+            SetStatus(false, "No commands to listen for");
+            return;
+        }
+
+        var input = SavedInput();
+        try
+        {
+            _listener.Start(EnabledPhrases(), wakeWord, _data.Settings.ConfidenceThreshold, input);
+            SetStatus(true, $"Listening for \"{wakeWord}\"");
+            Log($"Listening on {input.Name} for {EnabledPhrases().Count()} command(s), say \"{wakeWord}\" first");
         }
         catch (Exception ex)
         {
-            SetStatus(false);
+            SetStatus(false, "Not listening");
             Log("Could not start listening: " + ex.Message);
         }
     }
 
-    private void StopListening()
+    /// <summary>Wake word / confidence edits restart listening once typing pauses.</summary>
+    private void Settings_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        _listener.Stop();
-        SetStatus(false);
-        Log("Stopped listening");
+        if (e.PropertyName is not (nameof(AppSettings.WakeWord) or nameof(AppSettings.ConfidenceThreshold))) return;
+        _settingsDebounce.Stop();
+        _settingsDebounce.Start();
     }
 
-    /// <summary>The recognizer's grammar is fixed when it starts, so restart it after edits.</summary>
-    private void RestartIfListening()
+    private void SettingsDebounce_Tick(object? sender, EventArgs e)
     {
-        if (_listener.IsListening) StartListening();
+        _settingsDebounce.Stop();
+        try { CommandStore.Save(_data); } catch (Exception ex) { Log("Save failed: " + ex.Message); }
+        RefreshListening();
     }
 
     private IEnumerable<string> EnabledPhrases() =>
@@ -92,11 +146,13 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SetStatus(bool listening)
+    private void SetStatus(bool listening, string text)
     {
-        ListenButton.Content = listening ? "■  Stop listening" : "🎙  Start listening";
-        StatusText.Text = listening ? "Listening…" : "Not listening";
+        StatusText.Text = text;
         StatusDot.Fill = (Brush)FindResource(listening ? "ListeningBrush" : "IdleBrush");
+        MicButtonText.Text = _listener.Input?.Name ?? (_data.Settings.InputDeviceName.Length > 0
+            ? _data.Settings.InputDeviceName
+            : AudioInput.WindowsDefault.Name);
     }
 
     // ---- Command editing --------------------------------------------------------------
@@ -279,7 +335,7 @@ public partial class MainWindow : Window
         {
             CommandStore.Save(_data);
             Log("Saved");
-            RestartIfListening();
+            RefreshListening();
         }
         catch (Exception ex)
         {

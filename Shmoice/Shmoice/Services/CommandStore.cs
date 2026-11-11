@@ -53,6 +53,25 @@ public static class CommandStore
                         System.Globalization.CultureInfo.InvariantCulture, out var ms))
                     step.Parameter = (ms / 1000).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
         }
+        if (data.Version < 3)
+        {
+            // "play" / "pause" used the Play/Pause toggle key, so "play" could pause things.
+            // Switch commands named exactly that to the real Play / Pause actions.
+            foreach (var command in data.Commands)
+            {
+                var target = command.Phrase.Trim().ToLowerInvariant() switch
+                {
+                    "play" => ActionType.MediaPlay,
+                    "pause" => ActionType.MediaPause,
+                    _ => (ActionType?)null,
+                };
+                if (target is { } type)
+                    foreach (var step in command.Steps.Where(s => s.Type == ActionType.MediaPlayPause))
+                        step.Type = type;
+            }
+        }
+        // A wake word is now required; older files could have saved it empty.
+        if (string.IsNullOrWhiteSpace(data.Settings.WakeWord)) data.Settings.WakeWord = AppSettings.DefaultWakeWord;
         data.Version = AppData.CurrentVersion;
     }
 
@@ -69,8 +88,8 @@ public static class CommandStore
             Version = AppData.CurrentVersion,
             Commands =
             {
-                Cmd("play", ActionType.MediaPlayPause),
-                Cmd("pause", ActionType.MediaPlayPause),
+                Cmd("play", ActionType.MediaPlay),
+                Cmd("pause", ActionType.MediaPause),
                 Cmd("next song", ActionType.MediaNext),
                 Cmd("previous song", ActionType.MediaPrevious),
                 Cmd("volume up", ActionType.VolumeUp, 5),

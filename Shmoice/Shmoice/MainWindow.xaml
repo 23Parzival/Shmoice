@@ -13,6 +13,7 @@
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
         <local:ActionLabelConverter x:Key="ActionLabel" />
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
         <!-- Column header shared by both step lists. Widths match StepRow below. -->
         <Grid x:Key="StepHeaderTemplate" x:Shared="False" Margin="10,0,10,6">
@@ -56,7 +57,9 @@
                     </ComboBox>
 
                     <Grid Grid.Column="2" VerticalAlignment="Center">
-                        <TextBox Text="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding NeedsParameter}" />
+                        <TextBox x:Name="ParamBox" Text="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding NeedsParameter}" />
+                        <!-- "Press keys" records the keys you press instead of typing them. -->
+                        <local:KeyRecorder x:Name="KeyBox" Combo="{Binding Parameter, Mode=TwoWay}" Visibility="Collapsed" />
                         <TextBlock x:Name="Hint" Text="{Binding ParameterHint}" IsHitTestVisible="False" Visibility="Collapsed"
                                    Foreground="{StaticResource MutedTextBrush}" Margin="12,0" VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" FontStyle="Italic" />
@@ -66,6 +69,7 @@
                     <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Content="−" Click="RepeatDown_Click" Width="34" Padding="0,4" FontSize="15" ToolTip="Fewer times" />
                         <TextBox Text="{Binding Repeat, UpdateSourceTrigger=PropertyChanged}" Width="52" MinWidth="0" Margin="4,0"
+                                 local:InputFilter.Kind="Integer" MaxLength="3"
                                  TextAlignment="Center" FontSize="15" FontWeight="Bold" Padding="2,5"
                                  Foreground="{StaticResource AppAccentBrush}" ToolTip="How many times to run this step" />
                         <Button Content="+" Click="RepeatUp_Click" Width="34" Padding="0,4" FontSize="15" ToolTip="More times" />
@@ -80,6 +84,16 @@
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding Parameter}" Value="">
                     <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <!-- Listed last so it wins over the hint trigger above. -->
+                <DataTrigger Binding="{Binding Type}" Value="{x:Static models:ActionType.KeyCombo}">
+                    <Setter TargetName="ParamBox" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Hint" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="KeyBox" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <!-- Wait takes seconds, so only numbers are accepted. -->
+                <DataTrigger Binding="{Binding Type}" Value="{x:Static models:ActionType.Wait}">
+                    <Setter TargetName="ParamBox" Property="local:InputFilter.Kind" Value="Decimal" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -220,8 +234,16 @@
                         <TextBlock x:Name="StatusText" Text="Not listening" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
-                <Button x:Name="ListenButton" Content="🎙  Start listening" Click="ListenButton_Click"
-                        Style="{DynamicResource AccentButtonStyle}" Padding="18,8" FontWeight="SemiBold" />
+                <Button x:Name="MicButton" Click="MicButton_Click" Padding="14,8"
+                        ToolTip="Choose which microphone Shmoice listens to">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🎙" Margin="0,0,8,0" VerticalAlignment="Center" />
+                        <TextBlock x:Name="MicButtonText" MaxWidth="220" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="▾" Margin="8,0,0,0" Foreground="{StaticResource MutedTextBrush}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Grid>
 
@@ -294,11 +316,45 @@
                                         <Button Content="Save" Click="Save_Click" Style="{DynamicResource AccentButtonStyle}"
                                                 Padding="20,5" FontWeight="SemiBold" Margin="0,0,0,6" />
                                     </WrapPanel>
-                                    <TextBlock Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11.5" LineHeight="17">
-                                        <Run FontWeight="SemiBold">Press keys</Run> join keys with + (ctrl+shift+esc, alt+tab, win+d, f5) ·
-                                        <Run FontWeight="SemiBold">Open</Run> add program arguments after | ·
-                                        <Run FontWeight="SemiBold">Volume</Run> each press is 2%, so use Repeat (5 = 10%).
-                                    </TextBlock>
+                                    <!-- Quick tips for the steps whose parameter isn't obvious. -->
+                                    <!-- Plain text toggle: no box, no animation. -->
+                                    <ToggleButton x:Name="TipsToggle" Margin="0,6,0,0" HorizontalAlignment="Left" Cursor="Hand"
+                                                  Focusable="False">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <StackPanel Orientation="Horizontal" Background="Transparent">
+                                                    <TextBlock x:Name="Arrow" Text="▸" Width="12" Foreground="{StaticResource MutedTextBrush}"
+                                                               FontSize="11" VerticalAlignment="Center" />
+                                                    <TextBlock x:Name="Label" Text="TIPS" Style="{StaticResource SectionLabel}" Margin="0" />
+                                                </StackPanel>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="Arrow" Property="Text" Value="▾" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Label" Property="Foreground" Value="White" />
+                                                        <Setter TargetName="Arrow" Property="Foreground" Value="White" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                    <StackPanel TextBlock.Foreground="{StaticResource MutedTextBrush}" TextBlock.FontSize="11.5"
+                                                Margin="12,4,0,0"
+                                                Visibility="{Binding IsChecked, ElementName=TipsToggle, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
+                                            • <Run FontWeight="SemiBold">Press keys:</Run> click the box, then press the key or
+                                            combo you want, like Alt+Z or Win+D. Press Esc to cancel.
+                                        </TextBlock>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
+                                            • <Run FontWeight="SemiBold">Open:</Run> to pass extra options to a program, put them after a |, like
+                                            <Run FontFamily="Cascadia Mono, Consolas">notepad.exe | C:\notes.txt</Run>
+                                        </TextBlock>
+                                        <TextBlock TextWrapping="Wrap">
+                                            • <Run FontWeight="SemiBold">Volume up / down:</Run> each step changes the volume by 2%.
+                                            Set Repeat to 5 for a 10% change.
+                                        </TextBlock>
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <ContentControl Content="{Binding}" ContentTemplate="{StaticResource StepsPanel}"
@@ -397,7 +453,8 @@
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Height="38">
             <TextBlock Text="Wake word" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
             <TextBox Text="{Binding Settings.WakeWord, UpdateSourceTrigger=PropertyChanged}" Width="130" VerticalAlignment="Center"
-                     ToolTip="Optional. If set, say this before each command, e.g. &quot;computer volume up&quot;." />
+                     local:InputFilter.Kind="Words" MaxLength="30"
+                     ToolTip="Required. Say this before each command, e.g. &quot;computer volume up&quot;." />
             <Rectangle Width="1" Fill="{StaticResource CardBorderBrush}" Margin="18,8" />
             <TextBlock Text="Min confidence" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,10,0" />
             <Slider Value="{Binding Settings.ConfidenceThreshold}" Minimum="0.3" Maximum="0.95" Width="140"
