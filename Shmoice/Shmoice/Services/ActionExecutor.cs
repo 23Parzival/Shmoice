@@ -22,6 +22,14 @@ public static class ActionExecutor
 
     private static async Task RunStepAsync(ActionStep step)
     {
+        // Many actions are just a fixed keyboard shortcut.
+        if (ActionCatalog.Get(step.Type).Combo is { } combo)
+        {
+            SendCombo(combo);
+            return;
+        }
+
+        var p = step.Parameter;
         switch (step.Type)
         {
             case ActionType.MediaPlayPause: Tap(VK_MEDIA_PLAY_PAUSE); break;
@@ -34,11 +42,51 @@ public static class ActionExecutor
             case ActionType.VolumeUp: Tap(VK_VOLUME_UP); break;
             case ActionType.VolumeDown: Tap(VK_VOLUME_DOWN); break;
             case ActionType.VolumeMute: Tap(VK_VOLUME_MUTE); break;
-            case ActionType.KeyCombo: SendCombo(step.Parameter); break;
-            case ActionType.TypeText: TypeText(step.Parameter); break;
-            case ActionType.Open: Open(step.Parameter); break;
+            case ActionType.Mute: SystemActions.SetSpeakerMute(true); break;
+            case ActionType.Unmute: SystemActions.SetSpeakerMute(false); break;
+            case ActionType.SetVolume: SystemActions.SetVolume(p); break;
+            case ActionType.MicMuteToggle: SystemActions.SetMicMute(null); break;
+            case ActionType.MicMute: SystemActions.SetMicMute(true); break;
+            case ActionType.MicUnmute: SystemActions.SetMicMute(false); break;
+            case ActionType.KeyCombo: SendCombo(p); break;
+            case ActionType.TypeText: TypeText(p); break;
+            case ActionType.CopyText: SystemActions.CopyText(p); break;
+            case ActionType.MouseClick: Click(MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP); break;
+            case ActionType.MouseRightClick: Click(MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP); break;
+            case ActionType.MouseMiddleClick: Click(MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP); break;
+            case ActionType.MouseDoubleClick:
+                Click(MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP);
+                await Task.Delay(40);
+                Click(MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP);
+                break;
+            case ActionType.ScrollUp: Send([MouseInput(MOUSEEVENTF_WHEEL, WHEEL_DELTA)]); break;
+            case ActionType.ScrollDown: Send([MouseInput(MOUSEEVENTF_WHEEL, -WHEEL_DELTA)]); break;
+            case ActionType.ScrollLeft: Send([MouseInput(MOUSEEVENTF_HWHEEL, -WHEEL_DELTA)]); break;
+            case ActionType.ScrollRight: Send([MouseInput(MOUSEEVENTF_HWHEEL, WHEEL_DELTA)]); break;
+            case ActionType.MoveMouseTo: SystemActions.MoveMouseTo(p); break;
+            case ActionType.SearchWeb: Search("https://www.google.com/search?q=", p); break;
+            case ActionType.SearchYouTube: Search("https://www.youtube.com/results?search_query=", p); break;
+            case ActionType.Open: Open(p); break;
+            case ActionType.SwitchToApp: SystemActions.SwitchTo(p, () => Send([KeyInput(0x12, 0), KeyInput(0x12, KEYEVENTF_KEYUP)])); break;
+            case ActionType.CloseApp: SystemActions.CloseApp(p, force: false); break;
+            case ActionType.ForceQuitApp: SystemActions.CloseApp(p, force: true); break;
+            case ActionType.CloseWindow: SystemActions.CloseForegroundWindow(); break;
+            case ActionType.MinimizeWindow: SystemActions.MinimizeForegroundWindow(); break;
+            case ActionType.MaximizeWindow: SystemActions.ToggleMaximizeForegroundWindow(); break;
+            case ActionType.Screenshot: SystemActions.Screenshot(); break;
+            case ActionType.ToggleDarkMode: SystemActions.ToggleDarkMode(); break;
+            case ActionType.LockPC: SystemActions.Lock(); break;
+            case ActionType.Sleep: SystemActions.Sleep(); break;
+            case ActionType.DisplayOff: SystemActions.DisplayOff(); break;
+            case ActionType.ShutDown: SystemActions.Shutdown("/s /t 30"); break;
+            case ActionType.Restart: SystemActions.Shutdown("/r /t 30"); break;
+            case ActionType.CancelShutdown: SystemActions.Shutdown("/a"); break;
+            case ActionType.Speak: SystemActions.Speak(p); break;
+            case ActionType.SayTime: SystemActions.Speak($"It's {DateTime.Now:h:mm tt}"); break;
+            case ActionType.ShowMessage: SystemActions.ShowMessage(p); break;
+            case ActionType.RunCommand: SystemActions.RunCommand(p); break;
             case ActionType.Wait:
-                await Task.Delay(TimeSpan.FromSeconds(ParseSeconds(step.Parameter)));
+                await Task.Delay(TimeSpan.FromSeconds(ParseSeconds(p)));
                 break;
         }
     }
@@ -52,6 +100,12 @@ public static class ActionExecutor
                 System.Globalization.CultureInfo.InvariantCulture, out var seconds) || double.IsNaN(seconds))
             throw new ArgumentException($"Wait needs a number of seconds, e.g. 1.5 (got \"{text}\").");
         return Math.Clamp(seconds, 0, 600);
+    }
+
+    private static void Search(string baseUrl, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) throw new ArgumentException("Enter what to search for.");
+        Process.Start(new ProcessStartInfo { FileName = baseUrl + Uri.EscapeDataString(query.Trim()), UseShellExecute = true });
     }
 
     private static void Open(string target)
@@ -104,11 +158,19 @@ public static class ActionExecutor
     private static void SendCombo(string combo)
     {
         var keys = ParseCombo(combo);
-        var inputs = keys.Select(k => KeyInput(k, 0))                 // press in order
-            .Concat(Enumerable.Reverse(keys).Select(k => KeyInput(k, KEYEVENTF_KEYUP))) // release in reverse
+        var inputs = keys.Select(k => KeyInput(k, Extended(k)))                 // press in order
+            .Concat(Enumerable.Reverse(keys).Select(k => KeyInput(k, Extended(k) | KEYEVENTF_KEYUP))) // release in reverse
             .ToArray();
         Send(inputs);
     }
+
+    /// <summary>
+    /// Arrows, Home/End, PgUp/PgDn, Insert/Delete and the Windows keys are "extended" keys. Without the
+    /// flag Windows treats e.g. Left as the number-pad 4, which breaks shortcuts like Win+Left.
+    /// </summary>
+    private static uint Extended(ushort vk) =>
+        vk is >= 0x21 and <= 0x28 or 0x2D or 0x2E or 0x5B or 0x5C or 0x5D or 0x6F or 0x90 or 0xA3 or 0xA5
+            ? KEYEVENTF_EXTENDEDKEY : 0;
 
     private static void TypeText(string text)
     {
@@ -124,6 +186,8 @@ public static class ActionExecutor
     private static void Tap(ushort vk) =>
         Send([KeyInput(vk, KEYEVENTF_EXTENDEDKEY), KeyInput(vk, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP)]);
 
+    private static void Click(uint down, uint up) => Send([MouseInput(down, 0), MouseInput(up, 0)]);
+
     private static void Send(INPUT[] inputs)
     {
         var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
@@ -136,7 +200,13 @@ public static class ActionExecutor
 
     private const ushort VK_VOLUME_MUTE = 0xAD, VK_VOLUME_DOWN = 0xAE, VK_VOLUME_UP = 0xAF;
     private const ushort VK_MEDIA_NEXT_TRACK = 0xB0, VK_MEDIA_PREV_TRACK = 0xB1, VK_MEDIA_STOP = 0xB2, VK_MEDIA_PLAY_PAUSE = 0xB3;
-    private const uint INPUT_KEYBOARD = 1, KEYEVENTF_EXTENDEDKEY = 0x1, KEYEVENTF_KEYUP = 0x2, KEYEVENTF_UNICODE = 0x4;
+    private const uint INPUT_MOUSE = 0, INPUT_KEYBOARD = 1, KEYEVENTF_EXTENDEDKEY = 0x1, KEYEVENTF_KEYUP = 0x2, KEYEVENTF_UNICODE = 0x4;
+    private const uint MOUSEEVENTF_LEFTDOWN = 0x2, MOUSEEVENTF_LEFTUP = 0x4, MOUSEEVENTF_RIGHTDOWN = 0x8, MOUSEEVENTF_RIGHTUP = 0x10;
+    private const uint MOUSEEVENTF_MIDDLEDOWN = 0x20, MOUSEEVENTF_MIDDLEUP = 0x40, MOUSEEVENTF_WHEEL = 0x800, MOUSEEVENTF_HWHEEL = 0x1000;
+    private const int WHEEL_DELTA = 120;
+
+    private static INPUT MouseInput(uint flags, int wheel) =>
+        new() { type = INPUT_MOUSE, U = new InputUnion { mi = new MOUSEINPUT { dwFlags = flags, mouseData = unchecked((uint)wheel) } } };
 
     private static INPUT KeyInput(ushort vk, uint flags) =>
         new() { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wVk = vk, dwFlags = flags } } };

@@ -1,0 +1,60 @@
+<UserControl x:Class="Shmoice.ActionPicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Shmoice">
+    <Grid>
+        <!-- Looks like a dropdown; opens a searchable tree of actions grouped by category. -->
+        <ToggleButton x:Name="OpenButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                      Padding="11,6,10,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="LabelText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="1" Text="▾" Margin="8,0,0,0" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{StaticResource MutedTextBrush}" />
+            </Grid>
+        </ToggleButton>
+
+        <Popup x:Name="Popup" PlacementTarget="{Binding ElementName=OpenButton}" Placement="Bottom" VerticalOffset="4"
+               StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+               IsOpen="{Binding IsChecked, ElementName=OpenButton, Mode=TwoWay}"
+               Opened="Popup_Opened" Closed="Popup_Closed">
+            <Border x:Name="PopupBody" Background="{StaticResource CardBrush}" BorderBrush="{StaticResource CardBorderBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="6" PreviewKeyDown="PopupBody_PreviewKeyDown">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <TextBox x:Name="SearchBox" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                        <TextBlock x:Name="SearchHint" Text="Search actions…" IsHitTestVisible="False" Margin="12,0"
+                                   VerticalAlignment="Center" FontStyle="Italic" Foreground="{StaticResource MutedTextBrush}" />
+                    </Grid>
+                    <TextBlock x:Name="NoMatches" DockPanel.Dock="Top" Text="No actions match." Margin="10,6"
+                               Foreground="{StaticResource MutedTextBrush}" Visibility="Collapsed" />
+                    <TreeView x:Name="Tree" MaxHeight="420" Background="Transparent" BorderThickness="0"
+                              PreviewMouseLeftButtonUp="Tree_PreviewMouseLeftButtonUp">
+                        <TreeView.Resources>
+                            <HierarchicalDataTemplate DataType="{x:Type local:ActionCategoryNode}" ItemsSource="{Binding Items}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Items.Count}" Margin="8,0,0,0" FontSize="11"
+                                               VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}" />
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+                            <DataTemplate DataType="{x:Type local:ActionNode}">
+                                <TextBlock Text="{Binding Info.Label}" ToolTip="{Binding Info.Description}" />
+                            </DataTemplate>
+                        </TreeView.Resources>
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                <EventSetter Event="Selected" Handler="TreeItem_Selected" />
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

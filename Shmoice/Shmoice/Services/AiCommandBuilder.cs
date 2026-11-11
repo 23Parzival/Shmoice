@@ -21,22 +21,34 @@ public static class AiCommandBuilder
 
     private static readonly string[] ActionTypeNames = Enum.GetNames<ActionType>();
 
+    /// <summary>The action list for the prompt, built from the same catalog the app's picker uses.</summary>
+    private static string DescribeActions() => string.Join("\n", ActionCatalog.All
+        .GroupBy(a => a.Category)
+        .Select(g => $"{g.Key}:\n" + string.Join("\n", g.Select(a =>
+            $"- {a.Type}: {a.Description}" + a.Param switch
+            {
+                ParamKind.None => " Parameter is \"\".",
+                ParamKind.Keys => " Parameter: keys joined by \"+\", e.g. \"ctrl+shift+esc\".",
+                _ => $" Parameter: {a.Hint}.",
+            }))));
+
     private static readonly string SystemPrompt = $"""
         You turn a user's description of something they want their Windows PC to do into a short
         sequence of automation steps for "Shmoice", a voice-command app. The user will review and test
         your steps before saving, then trigger them by voice.
 
-        Available step types (field "type") and what "parameter" means for each:
-        - MediaPlay, MediaPause: start / pause whatever media is playing (never toggles); parameter is "". Prefer these over MediaPlayPause.
-        - MediaPlayPause, MediaNext, MediaPrevious, MediaStop: media keys (MediaPlayPause toggles); parameter is "".
-        - VolumeUp, VolumeDown: one press changes system volume by 2%; parameter is "". Use "repeat" for bigger changes (e.g. repeat 10 = 20%).
-        - VolumeMute: toggles mute; parameter is "".
-        - KeyCombo: a keyboard shortcut sent to the focused window. Keys joined by "+", e.g. "ctrl+shift+esc", "alt+tab", "win+d", "ctrl+t", "f5". Modifier names: ctrl, alt, shift, win. Other keys use .NET Key names (A-Z, 0-9, F1-F24, Enter, Escape, Tab, Space, Delete, Back, Home, End, PageUp, PageDown, Left, Right, Up, Down).
-        - TypeText: types the given text into the focused window.
-        - Open: opens a program, file, folder, or URL via the Windows shell. Optional command-line arguments go after a "|", e.g. "notepad.exe" or "chrome.exe|--incognito https://example.com". Prefer URI schemes and well-known executables (e.g. "spotify:", "ms-settings:display", "calc.exe", "https://...") over guessed install paths.
-        - Wait: pauses; parameter is the number of seconds as a string, decimals allowed, e.g. "1.5". Add a Wait after Open when later steps need the opened window to be ready.
+        Available step types (field "type"), grouped by category, and what "parameter" means for each:
+        {DescribeActions()}
 
-        "repeat" is how many times to run the step (1-100); use 1 unless repetition is the point.
+        Notes on specific types:
+        - Prefer MediaPlay / MediaPause / Mute / Unmute / MicMute / MicUnmute over the toggles when the user says which way.
+        - Prefer a dedicated type (Copy, NewTab, SnapLeft, OpenSettings…) over KeyCombo when one exists.
+        - KeyCombo keys are joined by "+", e.g. "ctrl+shift+esc", "alt+tab", "f5". Modifier names: ctrl, alt, shift, win. Other keys use .NET Key names (A-Z, 0-9, F1-F24, Enter, Escape, Tab, Space, Delete, Back, Home, End, PageUp, PageDown, Left, Right, Up, Down, OemPlus, OemMinus).
+        - Open: optional command-line arguments go after a "|", e.g. "chrome.exe|--incognito https://example.com". Prefer URI schemes and well-known executables (e.g. "spotify:", "ms-settings:display", "calc.exe", "https://...") over guessed install paths. Add a Wait after Open when later steps need the opened window to be ready.
+        - SwitchToApp / CloseApp / ForceQuitApp only work on apps that are already running; use Open to start apps.
+        - SetVolume parameter is a whole percent as a string, e.g. "30". Wait parameter is seconds as a string, e.g. "1.5". MoveMouseTo parameter is "x, y" in screen pixels.
+
+        "repeat" is how many times to run the step (1-100); use 1 unless repetition is the point (e.g. VolumeUp repeat 10 = +20%, ScrollDown repeat 5).
 
         Guidelines:
         - Use the fewest steps that reliably do the job.

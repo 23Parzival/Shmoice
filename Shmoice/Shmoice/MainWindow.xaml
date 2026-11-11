@@ -1,4 +1,5 @@
-﻿<Window x:Class="Shmoice.MainWindow"
+<Window x:Class="Shmoice.MainWindow"
+        Icon="/Assets/Shmoice.ico"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
@@ -7,11 +8,6 @@
         Title="Shmoice" Height="720" Width="1080" MinHeight="480" MinWidth="820"
         Background="{StaticResource WindowBgBrush}" FontSize="13">
     <Window.Resources>
-        <ObjectDataProvider x:Key="ActionTypes" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
-            <ObjectDataProvider.MethodParameters>
-                <x:Type TypeName="models:ActionType" />
-            </ObjectDataProvider.MethodParameters>
-        </ObjectDataProvider>
         <local:ActionLabelConverter x:Key="ActionLabel" />
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
@@ -47,14 +43,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <ComboBox Grid.Column="0" ItemsSource="{Binding Source={StaticResource ActionTypes}}"
-                              SelectedItem="{Binding Type}" VerticalAlignment="Center" HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Converter={StaticResource ActionLabel}}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
+                    <!-- Opens a searchable tree of actions grouped by category. -->
+                    <local:ActionPicker Grid.Column="0" SelectedType="{Binding Type}" VerticalAlignment="Center" />
 
                     <Grid Grid.Column="2" VerticalAlignment="Center">
                         <TextBox x:Name="ParamBox" Text="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding NeedsParameter}" />
@@ -86,14 +76,17 @@
                     <Setter TargetName="Hint" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <!-- Listed last so it wins over the hint trigger above. -->
-                <DataTrigger Binding="{Binding Type}" Value="{x:Static models:ActionType.KeyCombo}">
+                <DataTrigger Binding="{Binding ParameterKind}" Value="{x:Static models:ParamKind.Keys}">
                     <Setter TargetName="ParamBox" Property="Visibility" Value="Collapsed" />
                     <Setter TargetName="Hint" Property="Visibility" Value="Collapsed" />
                     <Setter TargetName="KeyBox" Property="Visibility" Value="Visible" />
                 </DataTrigger>
-                <!-- Wait takes seconds, so only numbers are accepted. -->
-                <DataTrigger Binding="{Binding Type}" Value="{x:Static models:ActionType.Wait}">
+                <!-- Number-only parameters (Wait seconds, Set volume percent). -->
+                <DataTrigger Binding="{Binding ParameterKind}" Value="{x:Static models:ParamKind.Decimal}">
                     <Setter TargetName="ParamBox" Property="local:InputFilter.Kind" Value="Decimal" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ParameterKind}" Value="{x:Static models:ParamKind.Integer}">
+                    <Setter TargetName="ParamBox" Property="local:InputFilter.Kind" Value="Integer" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -350,9 +343,23 @@
                                             • <Run FontWeight="SemiBold">Open:</Run> to pass extra options to a program, put them after a |, like
                                             <Run FontFamily="Cascadia Mono, Consolas">notepad.exe | C:\notes.txt</Run>
                                         </TextBlock>
-                                        <TextBlock TextWrapping="Wrap">
+                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
                                             • <Run FontWeight="SemiBold">Volume up / down:</Run> each step changes the volume by 2%.
-                                            Set Repeat to 5 for a 10% change.
+                                            Set Repeat to 5 for a 10% change. To jump to an exact level, use Set volume.
+                                        </TextBlock>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
+                                            • <Run FontWeight="SemiBold">Switch to / Close app:</Run> type part of the app's name or
+                                            window title, like <Run FontFamily="Cascadia Mono, Consolas">chrome</Run> or
+                                            <Run FontFamily="Cascadia Mono, Consolas">spotify</Run>. The app must already be open.
+                                        </TextBlock>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
+                                            • <Run FontWeight="SemiBold">Mouse:</Run> clicks happen wherever the pointer is. Each scroll
+                                            step is one notch of the wheel. Screenshots go to Pictures\Screenshots.
+                                        </TextBlock>
+                                        <TextBlock TextWrapping="Wrap">
+                                            • <Run FontWeight="SemiBold">Finding an action:</Run> open the action list and type to search,
+                                            like <Run FontFamily="Cascadia Mono, Consolas">tab</Run> or
+                                            <Run FontFamily="Cascadia Mono, Consolas">mute</Run>. Hover an action to see what it does.
                                         </TextBlock>
                                     </StackPanel>
                                 </StackPanel>
