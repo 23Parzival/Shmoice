@@ -28,6 +28,7 @@ public partial class MainWindow : Window
         _listener.Recognized += (phrase, confidence) => Dispatcher.Invoke(() => OnHeard(phrase, confidence));
         _listener.LowConfidence += (phrase, confidence) =>
             Dispatcher.Invoke(() => Log($"Ignored \"{phrase}\" ({confidence:P0} < threshold)"));
+        ActionExecutor.ListenForWords = ListenForWordsAsync;
 
         if (_data.Commands.Count > 0) CommandList.SelectedIndex = 0;
         UpdateEditorState();
@@ -147,6 +148,40 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Log($"\"{command.Phrase}\" failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// For "Listen for words" steps: chime, show "Say it now…" in the status pill, and wait for the
+    /// user to speak. Runs on the command's background thread.
+    /// </summary>
+    private async Task<string> ListenForWordsAsync(TimeSpan startTimeout)
+    {
+        string? previousText = null;
+        Brush? previousDot = null;
+        await Dispatcher.InvokeAsync(() =>
+        {
+            previousText = StatusText.Text;
+            previousDot = StatusDot.Fill;
+            StatusText.Text = "Say it now…";
+            StatusDot.Fill = (Brush)FindResource("AppAccentBrush");
+            Log("Listening for words…");
+        });
+        try
+        {
+            Chime.Play();
+            await Task.Delay(350); // let the chime finish so it isn't heard as speech
+            var words = await _listener.ListenForWordsAsync(startTimeout);
+            await Dispatcher.InvokeAsync(() => Log(words.Length > 0 ? $"Heard \"{words}\"" : "Didn't hear anything"));
+            return words;
+        }
+        finally
+        {
+            await Dispatcher.InvokeAsync(() =>
+            {
+                StatusText.Text = previousText;
+                StatusDot.Fill = previousDot;
+            });
         }
     }
 

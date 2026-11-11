@@ -8,19 +8,52 @@ namespace Shmoice.Services;
 /// <summary>Turns ActionSteps into real input / OS actions using the Win32 SendInput API.</summary>
 public static class ActionExecutor
 {
+    /// <summary>
+    /// Set by the app: waits for the user to say something (given how long to wait for them to start)
+    /// and returns the words, or "" if nothing was heard. Used by "Listen for words" steps.
+    /// </summary>
+    public static Func<TimeSpan, Task<string>>? ListenForWords { get; set; }
+
     public static Task RunAsync(VoiceCommand command) => Task.Run(async () =>
     {
+        var heard = ""; // what the last "Listen for words" step heard; steps use it as {heard}
         foreach (var step in command.Steps.ToList())
         {
+            if (step.Type == ActionType.ListenForWords)
+            {
+                heard = await ListenAsync(step.Parameter);
+                continue;
+            }
             for (var i = 0; i < step.Repeat; i++)
             {
-                await RunStepAsync(step);
+                await RunStepAsync(step, FillIn(step, heard));
                 if (step.Repeat > 1) await Task.Delay(30);
             }
         }
     });
 
-    private static async Task RunStepAsync(ActionStep step)
+    private static async Task<string> ListenAsync(string secondsText)
+    {
+        if (ListenForWords == null) throw new InvalidOperationException("Listening isn't available.");
+        var seconds = secondsText.Trim().Length == 0 ? 8 : Math.Clamp(ParseSeconds(secondsText), 1, 60);
+        var words = await ListenForWords(TimeSpan.FromSeconds(seconds));
+        // Stop here rather than e.g. searching for nothing.
+        if (words.Length == 0) throw new InvalidOperationException("Didn't hear anything, so the rest of the command was skipped.");
+        return words;
+    }
+
+    /// <summary>Puts what was heard into the step's parameter wherever it says {heard} (URL-encoded inside links).</summary>
+    private static string FillIn(ActionStep step, string heard)
+    {
+        var p = step.Parameter;
+        if (!p.Contains(ActionCatalog.HeardPlaceholder, StringComparison.OrdinalIgnoreCase)) return p;
+        // Inside a link (e.g. "youtube.com/results?search_query={heard}") the words must be encoded.
+        var insideLink = step.Type == ActionType.OpenUrl && !p.Trim().Equals(ActionCatalog.HeardPlaceholder, StringComparison.OrdinalIgnoreCase);
+        var value = insideLink ? Uri.EscapeDataString(heard) : heard;
+        return p.Replace(ActionCatalog.HeardPlaceholder, value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task RunStepAsync(ActionStep step, string p)
     {
         if (step.Type == ActionType.None) return; // no action chosen yet
 
@@ -31,7 +64,6 @@ public static class ActionExecutor
             return;
         }
 
-        var p = step.Parameter;
         switch (step.Type)
         {
             case ActionType.MediaPlayPause: Tap(VK_MEDIA_PLAY_PAUSE); break;

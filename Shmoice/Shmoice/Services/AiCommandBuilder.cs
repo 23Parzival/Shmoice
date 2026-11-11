@@ -32,17 +32,18 @@ public static class AiCommandBuilder
                 _ => $" Parameter: {a.Hint}.",
             }))));
 
-    private static readonly string SystemPrompt = $"""
+    private static readonly string SystemPrompt = $$"""
         You turn a user's description of something they want their Windows PC to do into a short
         sequence of automation steps for "Shmoice", a voice-command app. The user will review and test
         your steps before saving, then trigger them by voice.
 
         Available step types (field "type"), grouped by category, and what "parameter" means for each:
-        {DescribeActions()}
+        {{DescribeActions()}}
 
         Notes on specific types:
         - Prefer MediaPlay / MediaPause / Mute / Unmute / MicMute / MicUnmute over the toggles when the user says which way.
         - Prefer a dedicated type (Copy, NewTab, SnapLeft, OpenSettings…) over KeyCombo when one exists.
+        - ListenForWords lets a command take spoken input: it waits for the user to say something after the command, and any later step's parameter can include {heard}, which is replaced by those words (URL-encoded when inside an OpenUrl link). E.g. "search for" = ListenForWords, then SearchWeb with parameter "{heard}". Its own parameter is optional seconds to wait (usually "").
         - Use OpenUrl for websites (parameter is the link, e.g. "youtube.com"); it opens in the default browser, so no Open/Wait/NewTab steps are needed first.
         - KeyCombo keys are joined by "+", e.g. "ctrl+shift+esc", "alt+tab", "f5". Modifier names: ctrl, alt, shift, win. Other keys use .NET Key names (A-Z, 0-9, F1-F24, Enter, Escape, Tab, Space, Delete, Back, Home, End, PageUp, PageDown, Left, Right, Up, Down, OemPlus, OemMinus).
         - Open: optional command-line arguments go after a "|", e.g. "chrome.exe|--incognito https://example.com". Prefer URI schemes and well-known executables (e.g. "spotify:", "ms-settings:display", "calc.exe", "https://...") over guessed install paths. Add a Wait after Open when later steps need the opened window to be ready.

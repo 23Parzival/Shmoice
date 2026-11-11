@@ -366,6 +366,12 @@
                                             • <Run FontWeight="SemiBold">Mouse:</Run> clicks happen wherever the pointer is. Each scroll
                                             step is one notch of the wheel. Screenshots go to Pictures\Screenshots.
                                         </TextBlock>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
+                                            • <Run FontWeight="SemiBold">Listen for words:</Run> after the chime, say anything. Later
+                                            steps can use it by writing <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run>, like
+                                            Search YouTube → <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run> or
+                                            Type text → <Run FontFamily="Cascadia Mono, Consolas">Note: {heard}</Run>.
+                                        </TextBlock>
                                         <TextBlock TextWrapping="Wrap">
                                             • <Run FontWeight="SemiBold">Finding an action:</Run> open the action list and type to search,
                                             like <Run FontFamily="Cascadia Mono, Consolas">tab</Run> or

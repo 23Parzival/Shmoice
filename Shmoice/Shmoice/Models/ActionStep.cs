@@ -10,6 +10,10 @@ public enum ActionType
     /// <summary>No action picked yet (new steps start like this). Skipped when the command runs.</summary>
     None,
 
+    // Voice input
+    /// <summary>Waits for you to say something; later steps use it via {heard}. Parameter: seconds to wait.</summary>
+    ListenForWords,
+
     // Media
     MediaPlay, MediaPause, MediaPlayPause, MediaNext, MediaPrevious, MediaStop,
 
@@ -57,13 +61,20 @@ public record ActionInfo(ActionType Type, string Category, string Label, string 
 
 public static class ActionCatalog
 {
-    private const string Media = "Media", Audio = "Volume & audio", Keys = "Keyboard & text", Mouse = "Mouse",
+    /// <summary>Placeholder that later steps use for what a "Listen for words" step heard.</summary>
+    public const string HeardPlaceholder = "{heard}";
+
+    private const string Voice = "Voice input", Media = "Media", Audio = "Volume & audio", Keys = "Keyboard & text", Mouse = "Mouse",
         Browser = "Browser", Apps = "Apps", Window = "Window controls", Desktops = "Virtual desktops",
         Sys = "System", Power = "Power", Other = "Other";
 
     /// <summary>Every action, in the order shown in the picker.</summary>
     public static IReadOnlyList<ActionInfo> All { get; } =
     [
+        new(ActionType.ListenForWords, Voice, "Listen for words",
+            "Waits for you to say something (you'll hear a chime). Later steps can use what you said by writing {heard}, e.g. Search the web: {heard}.",
+            ParamKind.Decimal, "Seconds to wait for you to start talking (default 8)"),
+
         new(ActionType.MediaPlay, Media, "Play", "Resumes whatever media was playing. Never pauses."),
         new(ActionType.MediaPause, Media, "Pause", "Pauses whatever media is playing. Never resumes."),
         new(ActionType.MediaPlayPause, Media, "Play / Pause (toggle)", "Presses the play/pause media key."),

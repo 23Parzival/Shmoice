@@ -55,7 +55,18 @@ public sealed class SpeechListener : IDisposable
         var engine = new SpeechRecognitionEngine(info);
         try
         {
-            engine.LoadGrammar(new Grammar(builder) { Name = "commands" });
+            var commands = new Grammar(builder) { Name = "commands" };
+            engine.LoadGrammar(commands);
+            _commands = commands;
+            // Free dictation, switched on only while a "Listen for words" step is waiting.
+            try
+            {
+                var dictation = new DictationGrammar { Name = "dictation", Enabled = false };
+                engine.LoadGrammar(dictation);
+                _dictation = dictation;
+            }
+            catch (Exception) { _dictation = null; } // recognizer without dictation support
+            engine.SpeechDetected += OnSpeechDetected;
             if (input.IsDefault) engine.SetInputToDefaultAudioDevice();
             else StartMicrophone(engine, input.DeviceNumber);
             engine.SpeechRecognized += OnSpeechRecognized;
@@ -112,13 +123,72 @@ public sealed class SpeechListener : IDisposable
         Input = null;
         if (_engine == null) return;
         _engine.SpeechRecognized -= OnSpeechRecognized;
+        _engine.SpeechDetected -= OnSpeechDetected;
         _engine.RecognizeAsyncCancel();
         _engine.Dispose();
         _engine = null;
+        _commands = null;
+        _dictation = null;
+        _pendingWords?.TrySetCanceled();
+    }
+
+    // ---- Dictation ("Listen for words") ----------------------------------------------------
+
+    private Grammar? _commands;
+    private Grammar? _dictation;
+    private TaskCompletionSource<string>? _pendingWords;
+    private volatile bool _speechStarted;
+
+    /// <summary>
+    /// Switches from command phrases to free dictation, returns the next thing said, then switches
+    /// back. <paramref name="startTimeout"/> is how long to wait for you to start talking; once you
+    /// have started, it waits for you to finish. Returns "" if nothing was heard.
+    /// </summary>
+    public async Task<string> ListenForWordsAsync(TimeSpan startTimeout)
+    {
+        if (_engine == null || _commands == null)
+            throw new InvalidOperationException("Shmoice isn't listening right now (set a wake word and enable a command).");
+        if (_dictation == null)
+            throw new InvalidOperationException("This Windows speech language doesn't support free dictation.");
+        if (_pendingWords != null) throw new InvalidOperationException("Already listening for words.");
+
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingWords = tcs;
+        _speechStarted = false;
+        var commands = _commands;
+        var dictation = _dictation;
+        commands.Enabled = false; // so what you say can't trigger another command
+        dictation.Enabled = true;
+        try
+        {
+            if (await Task.WhenAny(tcs.Task, Task.Delay(startTimeout)) != tcs.Task && _speechStarted)
+                await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(15))); // still talking: let them finish
+            return tcs.Task.IsCompletedSuccessfully ? tcs.Task.Result : "";
+        }
+        finally
+        {
+            _pendingWords = null;
+            if (_dictation == dictation) // the engine wasn't restarted meanwhile
+            {
+                dictation.Enabled = false;
+                commands.Enabled = true;
+            }
+        }
+    }
+
+    private void OnSpeechDetected(object? sender, SpeechDetectedEventArgs e)
+    {
+        if (_pendingWords != null) _speechStarted = true;
     }
 
     private void OnSpeechRecognized(object? sender, SpeechRecognizedEventArgs e)
     {
+        if (e.Result.Grammar?.Name == "dictation")
+        {
+            if (e.Result.Text.Trim().Length > 0) _pendingWords?.TrySetResult(e.Result.Text.Trim());
+            return;
+        }
+
         var text = e.Result.Text.Trim();
         if (_wakeWord.Length > 0 && text.StartsWith(_wakeWord, StringComparison.OrdinalIgnoreCase))
             text = text[_wakeWord.Length..].Trim();
