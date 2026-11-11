@@ -94,7 +94,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Grid Margin="0,1">
+                        <Grid x:Name="Row" Margin="0,1">
                             <Border x:Name="Bd" CornerRadius="7" Background="Transparent" Padding="{TemplateBinding Padding}"
                                     MinHeight="{TemplateBinding MinHeight}">
                                 <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
@@ -114,6 +114,12 @@
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.5" />
                             </Trigger>
+                            <!-- The theme's scrollbar floats over the list, so while one is showing,
+                                 keep rows clear of it (otherwise it covers checkboxes on the right). -->
+                            <DataTrigger Binding="{Binding ComputedVerticalScrollBarVisibility, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                         Value="Visible">
+                                <Setter TargetName="Row" Property="Margin" Value="0,1,14,1" />
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
