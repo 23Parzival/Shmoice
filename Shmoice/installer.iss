@@ -25,6 +25,9 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#AppExe}
+; If Shmoice is somehow still running when files are replaced, close it rather than fail.
+CloseApplications=yes
+RestartApplications=no
 SetupIconFile=Shmoice\Assets\Shmoice.ico
 
 [Tasks]
@@ -41,3 +44,27 @@ Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: startup
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+; An update started from inside Shmoice runs this installer silently with /relaunch=1,
+; so open the new version again when it's done.
+Filename: "{app}\{#AppExe}"; Flags: nowait; Check: RelaunchRequested
+
+[Code]
+function RelaunchRequested: Boolean;
+begin
+  Result := ExpandConstant('{param:relaunch|0}') = '1';
+end;
+
+// Shmoice closes itself right after starting an update. Give it up to 15 seconds to be gone
+// before its exe is replaced. "Shmoice.Running" is created in App.xaml.cs; keep the names the same.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  if not RelaunchRequested then Exit;
+  for I := 1 to 75 do
+  begin
+    if not CheckForMutexes('Shmoice.Running') then Break;
+    Sleep(200);
+  end;
+end;

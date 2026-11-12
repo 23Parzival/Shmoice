@@ -118,6 +118,13 @@
                         It needs your own Anthropic API key, which is stored encrypted for your Windows account.
                     </TextBlock>
 
+                    <TextBlock Style="{StaticResource H}" Text="Updates" />
+                    <TextBlock Style="{StaticResource P}">
+                        When a new version is out, an <Bold>Update</Bold> button appears at the top right. Press it to see what's new; Shmoice
+                        then closes, updates and opens again with your commands and settings as they were. You can turn the automatic check
+                        off, or check by hand, under <Bold>Settings → About</Bold>.
+                    </TextBlock>
+
                     <TextBlock Style="{StaticResource H}" Text="Troubleshooting" />
                     <TextBlock Style="{StaticResource P}">
                         <Bold>Nothing happens when I talk.</Bold> Open <Bold>Voice test</Bold>: the level bar should move when you speak. If it

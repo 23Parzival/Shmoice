@@ -40,3 +40,17 @@ dotnet build Shmoice/Shmoice/Shmoice.csproj
 ```
 
 `Shmoice/publish.ps1` builds the single-file exe and the installer.
+
+## Releasing an update
+
+Installed copies of Shmoice look at this repository's latest GitHub release and offer to update themselves when its version is higher than their own.
+
+1. Raise `<Version>` in `Shmoice/Shmoice/Shmoice.csproj`, e.g. to `1.2.1`, and commit.
+2. Run `Shmoice/publish.ps1`. It makes `Shmoice/publish/Shmoice-Setup-1.2.1.0.exe`.
+3. Publish a release whose tag is `v` plus the same version, with that installer attached:
+
+```
+gh release create v1.2.1 Shmoice/publish/Shmoice-Setup-1.2.1.0.exe --title "Shmoice 1.2.1" --notes "What changed"
+```
+
+The tag must match the version in the csproj, the installer must keep its `Shmoice-Setup-<version>.exe` name (as publish.ps1 produces it), and the release must not be a draft or pre-release. The notes are shown to users before they update.

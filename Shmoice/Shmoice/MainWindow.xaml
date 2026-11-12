@@ -225,6 +225,9 @@
                 <TextBlock Text="Say it. Your PC does it." Foreground="{DynamicResource MutedTextBrush}" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <!-- Only shown once a newer version has been found on GitHub. -->
+                <Button x:Name="UpdateButton" Click="UpdateButton_Click" Style="{StaticResource AccentButton}" Padding="14,8"
+                        Margin="0,0,12,0" FontWeight="SemiBold" Visibility="Collapsed" />
                 <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1"
                         CornerRadius="14" Padding="12,5" Margin="0,0,12,0" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal">

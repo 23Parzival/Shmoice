@@ -142,6 +142,24 @@ public partial class SettingsTab : UserControl
         if (Host != null) Chime.Play(Host.Data.Settings.ChimeVolume);
     }
 
+    private async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        if (Host == null) return;
+        CheckUpdatesButton.IsEnabled = false;
+        UpdateStatus.Text = "Checking…";
+        try
+        {
+            UpdateStatus.Text = await Host.CheckForUpdatesAsync();
+            InstallUpdateButton.Visibility = Host.UpdateAvailable ? Visibility.Visible : Visibility.Collapsed;
+        }
+        finally { CheckUpdatesButton.IsEnabled = true; }
+    }
+
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (Host != null) await Host.InstallUpdateAsync();
+    }
+
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
         var folder = Path.GetDirectoryName(CommandStore.FilePath)!;

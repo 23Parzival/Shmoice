@@ -176,6 +176,11 @@ public class AppSettings : ObservableObject
     /// <summary>Open minimized to the taskbar (handy with Start with Windows).</summary>
     public bool StartMinimized { get => _startMinimized; set => Set(ref _startMinimized, value); }
 
+    private bool _checkForUpdates = true;
+
+    /// <summary>Look for a newer version on GitHub at startup and a few times a day. Nothing installs without asking.</summary>
+    public bool CheckForUpdates { get => _checkForUpdates; set => Set(ref _checkForUpdates, value); }
+
     public const string DefaultAccent = "#7C5CFF";
 
     private string _accentColor = DefaultAccent;

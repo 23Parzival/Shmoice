@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -65,7 +66,100 @@ public partial class MainWindow : Window
             UpdateScheduleStatus();
             _scheduleTimer.Tick += ScheduleTimer_Tick;
             _scheduleTimer.Start();
+            // Shmoice is often left running for days, so look again now and then, not just at startup.
+            _updateTimer.Tick += async (_, _) => await AutoCheckForUpdatesAsync();
+            _updateTimer.Start();
+            _ = AutoCheckForUpdatesAsync();
         };
+    }
+
+    // ---- Updates ----------------------------------------------------------------------
+
+    private readonly System.Windows.Threading.DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(6) };
+    private UpdateInfo? _update;
+    private bool _updating;
+
+    /// <summary>True once a newer version has been found.</summary>
+    public bool UpdateAvailable => _update != null;
+
+    private async Task AutoCheckForUpdatesAsync()
+    {
+        if (_data.Settings.CheckForUpdates && _update == null) await CheckForUpdatesAsync();
+    }
+
+    /// <summary>
+    /// Looks on GitHub for a newer version and, if there is one, shows the update button in the header.
+    /// Returns a line saying what it found (shown by the Settings tab's "Check now").
+    /// </summary>
+    public async Task<string> CheckForUpdatesAsync()
+    {
+        try
+        {
+            _update = await UpdateChecker.CheckAsync();
+        }
+        catch (Exception ex)
+        {
+            // Being offline is normal; don't fill the activity log with it.
+            return "Couldn't check for updates: " + ex.Message;
+        }
+
+        if (_update == null)
+        {
+            UpdateButton.Visibility = Visibility.Collapsed;
+            return $"You have the latest version ({UpdateChecker.CurrentVersion.ToString(3)}).";
+        }
+        var wasShown = UpdateButton.Visibility == Visibility.Visible;
+        ShowUpdateButton();
+        UpdateButton.Visibility = Visibility.Visible;
+        if (!wasShown) Log($"Shmoice {_update.Version.ToString(3)} is available. Press the update button at the top to install it.");
+        return $"Shmoice {_update.Version.ToString(3)} is available.";
+    }
+
+    private void ShowUpdateButton()
+    {
+        UpdateButton.Content = $"⬆  Update to {_update!.Version.ToString(3)}";
+        UpdateButton.ToolTip = "A newer version of Shmoice is available. Click to see what's new and install it.";
+    }
+
+    private async void UpdateButton_Click(object sender, RoutedEventArgs e) => await InstallUpdateAsync();
+
+    /// <summary>Asks, then downloads the installer, starts it and closes Shmoice so it can be replaced.</summary>
+    public async Task InstallUpdateAsync()
+    {
+        if (_update is not { } update || _updating) return;
+
+        // A copy that wasn't installed (e.g. run straight from a build folder) can't be replaced in place.
+        if (!UpdateChecker.IsInstalled || update.InstallerUrl == null)
+        {
+            Log("Opening the download page for the new version");
+            Process.Start(new ProcessStartInfo { FileName = update.PageUrl, UseShellExecute = true });
+            return;
+        }
+
+        var notes = update.Notes.Length > 600 ? update.Notes[..600].TrimEnd() + "…" : update.Notes;
+        var message = (notes.Length > 0 ? notes + "\n\n" : "") +
+            "Shmoice will close, update itself and open again. Your commands and settings are kept.";
+        if (!ConfirmDialog.Ask(this, $"Update to Shmoice {update.Version.ToString(3)}?", message, "Update now", out _, showDontAsk: false))
+            return;
+
+        _updating = true;
+        UpdateButton.IsEnabled = false;
+        try
+        {
+            Log($"Downloading Shmoice {update.Version.ToString(3)}…");
+            var progress = new Progress<double>(p => UpdateButton.Content = $"Downloading…  {p:P0}");
+            var installer = await UpdateChecker.DownloadAsync(update, progress);
+            UpdateButton.Content = "Installing…";
+            UpdateChecker.StartInstaller(installer);
+            Close(); // saves everything; the installer waits for us to be gone
+        }
+        catch (Exception ex)
+        {
+            Log("Update failed: " + ex.Message);
+            _updating = false;
+            UpdateButton.IsEnabled = true;
+            ShowUpdateButton();
+        }
     }
 
     private VoiceCommand? Selected => CommandList.SelectedItem as VoiceCommand;

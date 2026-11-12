@@ -8,9 +8,16 @@ namespace Shmoice;
 
 public partial class App : Application
 {
+    /// <summary>
+    /// Exists for as long as Shmoice is running. The installer waits for it to go away before replacing
+    /// the exe during an update (see PrepareToInstall in installer.iss; keep the name the same there).
+    /// </summary>
+    private static Mutex? _runningMarker;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        _runningMarker = new Mutex(false, "Shmoice.Running");
 
         // App-wide: Enter (in single-line boxes) or clicking anywhere else takes focus out of a text box.
         EventManager.RegisterClassHandler(typeof(TextBox), UIElement.KeyDownEvent, new KeyEventHandler(TextInput_KeyDown));
