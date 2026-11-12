@@ -147,6 +147,19 @@ public class Schedule : ObservableObject
     public bool RunsOn(DayOfWeek day) => Day(((int)day + 6) % 7);
 }
 
+/// <summary>What the user entered for one AI service. Empty address or model = use that service's default.</summary>
+public class AiProviderConfig
+{
+    /// <summary>Web address of the service's API, e.g. http://localhost:11434/v1.</summary>
+    public string BaseUrl { get; set; } = "";
+
+    /// <summary>Model name as the service knows it, e.g. llama3.2.</summary>
+    public string Model { get; set; } = "";
+
+    /// <summary>API key, encrypted with Windows DPAPI (see SecretStore). Services on your own PC usually need none.</summary>
+    public string EncryptedApiKey { get; set; } = "";
+}
+
 public class AppSettings : ObservableObject
 {
     public const string DefaultWakeWord = "computer";
@@ -160,8 +173,17 @@ public class AppSettings : ObservableObject
     /// <summary>0..1 — recognitions below this are ignored to avoid false triggers.</summary>
     public double ConfidenceThreshold { get => _confidenceThreshold; set => Set(ref _confidenceThreshold, Math.Clamp(value, 0, 1)); }
 
-    /// <summary>Anthropic API key, encrypted with Windows DPAPI (see SecretStore). Empty = use ANTHROPIC_API_KEY env var.</summary>
+    /// <summary>
+    /// Where the Anthropic key was kept before other AI services could be chosen. Moved into
+    /// <see cref="AiProviders"/> when an older file is loaded, and empty from then on.
+    /// </summary>
     public string EncryptedApiKey { get; set; } = "";
+
+    /// <summary>Which AI service the AI Builder and "Ask AI" steps use: an id from Services.AiProviders.</summary>
+    public string AiProvider { get; set; } = "anthropic";
+
+    /// <summary>The address, model and key entered for each AI service, by its id, so switching between them keeps each one's details.</summary>
+    public Dictionary<string, AiProviderConfig> AiProviders { get; set; } = new();
 
     private bool _confirmDelete = true;
     private bool _showSplash = true;

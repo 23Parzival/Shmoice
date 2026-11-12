@@ -57,7 +57,7 @@ public enum ActionType
     PickJson,
     /// <summary>Runs a PowerShell script and waits; its output becomes {result}.</summary>
     RunPowerShell,
-    /// <summary>Asks Claude a question; the answer becomes {result}.</summary>
+    /// <summary>Asks the chosen AI service a question; the answer becomes {result}.</summary>
     AskAi,
     /// <summary>Stops the command (quietly) unless the condition holds, e.g. "{app} is chrome".</summary>
     ContinueIf,
@@ -80,7 +80,7 @@ public static class ActionCatalog
     /// <summary>Placeholder that later steps use for what a "Listen for words" step heard.</summary>
     public const string HeardPlaceholder = "{heard}";
 
-    /// <summary>Placeholder for the output of the last web request, PowerShell script, Ask Claude or Pick-from-result step.</summary>
+    /// <summary>Placeholder for the output of the last web request, PowerShell script, Ask AI or Pick-from-result step.</summary>
     public const string ResultPlaceholder = "{result}";
 
     private const string Voice = "Voice input", Media = "Media", Audio = "Volume & audio", Keys = "Keyboard & text", Mouse = "Mouse",
@@ -216,8 +216,8 @@ public static class ActionCatalog
         new(ActionType.RunPowerShell, Advanced, "Run PowerShell script",
             "Runs PowerShell with no window and waits for it to finish (up to 60 seconds). What it prints is kept as {result}. Fails if the script reports an error.",
             ParamKind.Text, "e.g. (Get-Date).DayOfWeek"),
-        new(ActionType.AskAi, Advanced, "Ask Claude",
-            "Sends a question to Claude and keeps the short answer as {result}, e.g. to say aloud or paste. Uses your Anthropic API key from the AI Builder tab.",
+        new(ActionType.AskAi, Advanced, "Ask AI",
+            "Sends a question to your AI and keeps the short answer as {result}, e.g. to say aloud or paste. Uses the AI service chosen in Settings → AI.",
             ParamKind.Text, "Question, e.g. {heard} or Summarize this: {clipboard}"),
         new(ActionType.ContinueIf, Advanced, "Continue only if…",
             "Stops the command here unless the condition is true. Write two values with one of: is, is not, contains, does not contain, starts with, ends with, >, <, is empty, is not empty.",

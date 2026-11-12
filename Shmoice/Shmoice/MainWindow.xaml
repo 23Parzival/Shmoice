@@ -163,6 +163,23 @@
             </MenuItem>
         </ContextMenu>
 
+        <!-- The ‹ › arrows on the back / forward buttons, drawn so they sit exactly in the middle. Dim while the button is off. -->
+        <Style x:Key="NavChevron" TargetType="Path">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="Height" Value="11" />
+            <Setter Property="Stretch" Value="Fill" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+            <Setter Property="Stroke" Value="{DynamicResource BodyTextBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Button}}" Value="False">
+                    <Setter Property="Opacity" Value="0.35" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Invisible drag area with a small visible grip; highlights on hover. -->
         <Style x:Key="VSplitter" TargetType="GridSplitter">
             <Setter Property="Width" Value="14" />
@@ -322,7 +339,48 @@
                                 <StackPanel DockPanel.Dock="Top">
                                     <!-- Label on the left, profile picker on the right of the same row, to leave more height for the steps. -->
                                     <Grid Margin="0,0,0,6">
-                                        <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" Margin="0" VerticalAlignment="Bottom" />
+                                        <!-- "WHEN I SAY “computer” ✎", then the phrase box below: the wake word is a link that opens a small box to change it.
+                                             The editor's DataContext is the command, so this panel points back at the app settings. -->
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom" HorizontalAlignment="Left"
+                                                    DataContext="{Binding DataContext.Settings, RelativeSource={RelativeSource AncestorType=Window}}">
+                                            <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" Margin="0" VerticalAlignment="Center" />
+                                            <ToggleButton x:Name="WakeWordToggle" Margin="6,0,0,0" VerticalAlignment="Center" Cursor="Hand" Focusable="False"
+                                                          ToolTip="The wake word you say before every command. Click to change it.">
+                                                <ToggleButton.Template>
+                                                    <ControlTemplate TargetType="ToggleButton">
+                                                        <StackPanel Orientation="Horizontal" Background="Transparent">
+                                                            <TextBlock x:Name="Word" Style="{StaticResource SectionLabel}" Margin="0"
+                                                                       Foreground="{DynamicResource AppAccentBrush}"
+                                                                       Text="{Binding WakeWord, StringFormat='“{0}”'}" />
+                                                            <TextBlock x:Name="Pencil" Text="✎" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"
+                                                                       Foreground="{DynamicResource MutedTextBrush}" />
+                                                        </StackPanel>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Word" Property="TextDecorations" Value="Underline" />
+                                                                <Setter TargetName="Pencil" Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </ToggleButton.Template>
+                                            </ToggleButton>
+                                            <Popup x:Name="WakeWordPopup" PlacementTarget="{Binding ElementName=WakeWordToggle}" Placement="Bottom"
+                                                   VerticalOffset="6" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+                                                   IsOpen="{Binding IsChecked, ElementName=WakeWordToggle, Mode=TwoWay}"
+                                                   Opened="WakeWordPopup_Opened" Closed="WakeWordPopup_Closed">
+                                                <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                                        BorderThickness="1" CornerRadius="8" Padding="14,12" Width="300">
+                                                    <StackPanel>
+                                                        <TextBlock Text="WAKE WORD" Style="{StaticResource SectionLabel}" />
+                                                        <TextBox x:Name="WakeWordBox" Text="{Binding WakeWord, UpdateSourceTrigger=PropertyChanged}"
+                                                                 local:InputFilter.Kind="Words" MaxLength="30" KeyDown="WakeWordBox_KeyDown" />
+                                                        <TextBlock TextWrapping="Wrap" FontSize="11.5" Margin="0,8,0,0"
+                                                                   Foreground="{DynamicResource MutedTextBrush}"
+                                                                   Text="Said before every command, for all your commands. Pick a word you don't say by accident." />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Popup>
+                                        </StackPanel>
                                         <!-- Profiles: limit this command to certain apps. -->
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                             <TextBlock Text="Runs in" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,10,0" />
@@ -397,7 +455,7 @@
                                         <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
                                             • <Run FontWeight="SemiBold">Advanced:</Run> Send web request is written
                                             <Run FontFamily="Cascadia Mono, Consolas">POST https://… | Header: value | body</Run>. Its reply, a
-                                            script's output or Claude's answer is the <Run FontFamily="Cascadia Mono, Consolas">{result}</Run>
+                                            script's output or an AI's answer is the <Run FontFamily="Cascadia Mono, Consolas">{result}</Run>
                                             for later steps. You can also write <Run FontFamily="Cascadia Mono, Consolas">{clipboard}</Run>,
                                             <Run FontFamily="Cascadia Mono, Consolas">{date}</Run>, <Run FontFamily="Cascadia Mono, Consolas">{time}</Run>
                                             and <Run FontFamily="Cascadia Mono, Consolas">{app}</Run>. More in the Help tab.
@@ -434,14 +492,15 @@
                     <!-- Describe + API key -->
                     <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16">
                         <DockPanel>
-                            <!-- API key (bottom) -->
+                            <!-- Which AI is used (bottom); it's chosen in Settings → AI. -->
                             <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
-                                <TextBlock Text="ANTHROPIC API KEY" Style="{StaticResource SectionLabel}" />
+                                <TextBlock Text="AI SERVICE" Style="{StaticResource SectionLabel}" />
                                 <DockPanel>
-                                    <Button DockPanel.Dock="Right" Content="Save key" Click="SaveApiKey_Click" Margin="6,0,0,0" />
-                                    <PasswordBox x:Name="ApiKeyBox" VerticalAlignment="Center" />
+                                    <Button DockPanel.Dock="Right" Content="Change" Click="AiSettings_Click" Margin="8,0,0,0" VerticalAlignment="Center"
+                                            ToolTip="Choose the AI service, model and key in Settings" />
+                                    <TextBlock x:Name="AiProviderStatus" VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                 </DockPanel>
-                                <TextBlock x:Name="ApiKeyStatus" Foreground="{DynamicResource MutedTextBrush}" FontSize="11.5"
+                                <TextBlock x:Name="AiProviderHint" Foreground="{DynamicResource MutedTextBrush}" FontSize="11.5"
                                            TextWrapping="Wrap" Margin="0,6,0,0" />
                             </StackPanel>
 
@@ -524,11 +583,16 @@
 
         <!-- ===== Back / forward through the commands and tabs you've viewed, like a browser ===== -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Height="38">
-            <Button x:Name="BackButton" Content="‹" Click="Back_Click" Width="34" Height="30" Padding="0,0,0,3"
-                    FontSize="20" Margin="0,0,4,0" IsEnabled="False"
-                    ToolTip="Back: undo your last change, or go back to the last command you had open (Alt+Left)" />
-            <Button x:Name="ForwardButton" Content="›" Click="Forward_Click" Width="34" Height="30" Padding="0,0,0,3"
-                    FontSize="20" IsEnabled="False" ToolTip="Forward: redo, or go forward again (Alt+Right)" />
+            <Button x:Name="BackButton" Click="Back_Click" Width="34" Height="30" Padding="0"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="0,0,4,0" IsEnabled="False"
+                    ToolTip="Back: undo your last change, or go back to the last command you had open (Alt+Left)">
+                <!-- Drawn chevrons: the ‹ › text characters sit below the middle of the button. -->
+                <Path Data="M 6,0 L 0,6 L 6,12" Style="{StaticResource NavChevron}" />
+            </Button>
+            <Button x:Name="ForwardButton" Click="Forward_Click" Width="34" Height="30" Padding="0"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center" IsEnabled="False" ToolTip="Forward: redo, or go forward again (Alt+Right)">
+                <Path Data="M 0,0 L 6,6 L 0,12" Style="{StaticResource NavChevron}" />
+            </Button>
         </StackPanel>
 
 

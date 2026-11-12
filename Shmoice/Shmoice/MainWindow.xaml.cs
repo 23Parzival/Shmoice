@@ -45,12 +45,12 @@ public partial class MainWindow : Window
         ActionExecutor.ListenForWords = ListenForWordsAsync;
         // Commands run on a background thread, so these hop to the UI thread to read the data.
         ActionExecutor.FindCommand = phrase => Dispatcher.Invoke(() => FindCommandByPhrase(phrase));
-        ActionExecutor.GetApiKey = () => Dispatcher.Invoke(GetApiKey);
+        ActionExecutor.GetAi = () => Dispatcher.Invoke(CurrentAi);
         ActionExecutor.Log = message => Dispatcher.BeginInvoke(() => Log(message));
 
         if (_data.Commands.Count > 0) CommandList.SelectedIndex = 0;
         UpdateEditorState();
-        UpdateApiKeyStatus();
+        UpdateAiStatus();
         Log($"Commands loaded from {CommandStore.FilePath}");
 
         // Always listening: start as soon as the window is up, and restart when settings change.
@@ -618,6 +618,30 @@ public partial class MainWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e) => SaveAll();
 
+    // ---- Wake word box beside "WHEN I SAY" ----------------------------------------------
+    // The box edits Settings.WakeWord directly, which saves and restarts listening by itself.
+
+    private void WakeWordPopup_Opened(object? sender, EventArgs e)
+    {
+        // While open, a click on the link counts as "click outside" and closes the box, instead of closing and reopening it.
+        WakeWordToggle.IsHitTestVisible = false;
+        Dispatcher.BeginInvoke(() => { WakeWordBox.Focus(); WakeWordBox.SelectAll(); }, System.Windows.Threading.DispatcherPriority.Input);
+    }
+
+    private void WakeWordPopup_Closed(object? sender, EventArgs e)
+    {
+        WakeWordToggle.IsHitTestVisible = true;
+        // An empty wake word would stop Shmoice listening; put the default back rather than leave it blank.
+        if (string.IsNullOrWhiteSpace(_data.Settings.WakeWord)) _data.Settings.WakeWord = AppSettings.DefaultWakeWord;
+    }
+
+    private void WakeWordBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Escape)) return;
+        WakeWordToggle.IsChecked = false;
+        e.Handled = true;
+    }
+
     /// <summary>Save now without restarting listening (profiles and schedules don't change what Shmoice listens for).</summary>
     public void SaveQuietly()
     {
@@ -887,30 +911,32 @@ public partial class MainWindow : Window
     private VoiceCommand? _draft;
     private CancellationTokenSource? _generateCts;
 
-    private string GetApiKey()
+    /// <summary>The AI service chosen in Settings → AI, ready to use. Throws (with what's missing) if it isn't set up.</summary>
+    private AiConnection CurrentAi() => AiProviders.Connect(_data.Settings);
+
+    /// <summary>Shows which AI service and model the builder will use. Called at startup and whenever Settings → AI changes.</summary>
+    public void UpdateAiStatus()
     {
-        var saved = SecretStore.Unprotect(_data.Settings.EncryptedApiKey);
-        return saved.Length > 0 ? saved : Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "";
+        var provider = AiProviders.Get(_data.Settings.AiProvider);
+        try
+        {
+            var ai = CurrentAi();
+            AiProviderStatus.Text = $"{provider.Name}  ·  {ai.Model}";
+            AiProviderHint.Text = provider.Local && provider.Id != AiProviders.CustomId
+                ? "Runs on this PC, so what you type stays here."
+                : $"What you type is sent to {(provider.Id == AiProviders.CustomId ? "that address" : provider.Name)}.";
+        }
+        catch (Exception ex)
+        {
+            AiProviderStatus.Text = provider.Name + "  ·  not set up";
+            AiProviderHint.Text = ex.Message;
+        }
     }
 
-    private void UpdateApiKeyStatus()
+    private void AiSettings_Click(object sender, RoutedEventArgs e)
     {
-        if (SecretStore.Unprotect(_data.Settings.EncryptedApiKey).Length > 0)
-            ApiKeyStatus.Text = "✓ Key saved (encrypted for your Windows account). Paste a new one to replace it.";
-        else if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")))
-            ApiKeyStatus.Text = "✓ Using the ANTHROPIC_API_KEY environment variable.";
-        else
-            ApiKeyStatus.Text = "No key yet. Create one at console.anthropic.com → API Keys, paste it above, and press Save key.";
-    }
-
-    private void SaveApiKey_Click(object sender, RoutedEventArgs e)
-    {
-        var key = ApiKeyBox.Password.Trim();
-        _data.Settings.EncryptedApiKey = SecretStore.Protect(key);
-        ApiKeyBox.Clear();
-        SaveAll();
-        UpdateApiKeyStatus();
-        Log(key.Length > 0 ? "API key saved" : "API key removed");
+        MainTabs.SelectedItem = MainTabs.Items.OfType<TabItem>().First(t => t.Content == SettingsTabControl);
+        SettingsTabControl.ShowAiSection();
     }
 
     private async void Generate_Click(object sender, RoutedEventArgs e)
@@ -920,16 +946,17 @@ public partial class MainWindow : Window
 
         var description = AiPrompt.Text.Trim();
         if (description.Length == 0) { AiStatus.Text = "Describe what you want the command to do first."; return; }
-        var apiKey = GetApiKey();
-        if (apiKey.Length == 0) { AiStatus.Text = "Add your Anthropic API key below first."; return; }
+        AiConnection ai;
+        try { ai = CurrentAi(); }
+        catch (Exception ex) { AiStatus.Text = ex.Message; return; }
 
-        _generateCts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        _generateCts = new CancellationTokenSource(TimeSpan.FromMinutes(5)); // models running on this PC can be slow
         GenerateButton.Content = "Cancel";
         GenerateProgress.Visibility = Visibility.Visible;
         AiStatus.Text = "Thinking…";
         try
         {
-            var draft = await AiCommandBuilder.GenerateAsync(apiKey, description, _generateCts.Token);
+            var draft = await AiCommandBuilder.GenerateAsync(ai, description, _generateCts.Token);
             ShowDraft(draft);
             AiStatus.Text = draft.Steps.Count == 0
                 ? "Couldn't turn that into steps — see the note on the right."

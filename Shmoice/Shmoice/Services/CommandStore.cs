@@ -95,6 +95,14 @@ public static class CommandStore
                         step.Type = type;
             }
         }
+        // The Anthropic key used to be the only AI setting; it now lives with the other AI services.
+        if (data.Settings.EncryptedApiKey.Length > 0)
+        {
+            if (!data.Settings.AiProviders.TryGetValue("anthropic", out var anthropic))
+                data.Settings.AiProviders["anthropic"] = anthropic = new AiProviderConfig();
+            if (anthropic.EncryptedApiKey.Length == 0) anthropic.EncryptedApiKey = data.Settings.EncryptedApiKey;
+            data.Settings.EncryptedApiKey = "";
+        }
         // A wake word is now required; older files could have saved it empty.
         if (string.IsNullOrWhiteSpace(data.Settings.WakeWord)) data.Settings.WakeWord = AppSettings.DefaultWakeWord;
         data.Version = AppData.CurrentVersion;

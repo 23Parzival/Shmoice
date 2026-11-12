@@ -106,7 +106,13 @@
                     <ListBoxItem>
                         <StackPanel Margin="0,4">
                             <TextBlock Text="⚙  Commands" FontWeight="SemiBold" FontSize="14" />
-                            <TextBlock Text="Delete confirmation, AI key" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="Delete confirmation" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Margin="0,4">
+                            <TextBlock Text="✨  AI" FontWeight="SemiBold" FontSize="14" />
+                            <TextBlock Text="Which AI service, model and key to use" Foreground="{DynamicResource MutedTextBrush}" FontSize="11" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </ListBoxItem>
                     <ListBoxItem>
@@ -265,8 +271,72 @@
                         <TextBlock Text="Commands" Style="{StaticResource Title}" />
                         <CheckBox Content="Ask before deleting a command" IsChecked="{Binding Settings.ConfirmDelete}" />
                         <TextBlock Style="{StaticResource Hint}" Margin="30,2,0,18" Text="You can also undo a delete with the ‹ back button." />
-                        <TextBlock Text="AI Builder key" FontWeight="SemiBold" />
-                        <TextBlock Style="{StaticResource Hint}" Text="Your Anthropic API key is set in the AI Builder tab. It's stored encrypted for your Windows account." />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- AI: which service the AI Builder and Ask AI steps use. Filled in and saved by the code-behind. -->
+                <ScrollViewer x:Name="AiSection" Style="{StaticResource Section}">
+                    <StackPanel MaxWidth="720" HorizontalAlignment="Left">
+                        <TextBlock Text="AI" Style="{StaticResource Title}" Margin="0,0,0,4" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,20"
+                                   Text="Used by the AI Builder tab and by “Ask AI” steps. Choose a service on the internet, or a model running on your own PC. Each service remembers its own address, model and key, so you can switch back and forth." />
+
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="Service" VerticalAlignment="Top" Margin="0,7,0,0" />
+                            <StackPanel Grid.Column="1">
+                                <ComboBox x:Name="AiProviderCombo" Width="340" HorizontalAlignment="Left" DisplayMemberPath="Name"
+                                          SelectionChanged="AiProvider_Changed" />
+                                <TextBlock x:Name="AiNote" Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid x:Name="AiAddressRow" Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="Address" VerticalAlignment="Top" Margin="0,7,0,0" />
+                            <StackPanel Grid.Column="1">
+                                <TextBox x:Name="AiAddress" Width="460" HorizontalAlignment="Left" LostFocus="AiAddress_LostFocus"
+                                         FontFamily="Cascadia Mono, Consolas" FontSize="12.5" />
+                                <TextBlock x:Name="AiAddressHint" Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="Model" VerticalAlignment="Top" Margin="0,7,0,0" />
+                            <StackPanel Grid.Column="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <ComboBox x:Name="AiModel" Width="340" IsEditable="True" IsTextSearchEnabled="False"
+                                              LostFocus="AiModel_Changed" SelectionChanged="AiModel_Changed" DropDownClosed="AiModel_Changed" />
+                                    <Button x:Name="FindModelsButton" Content="Find models" Click="FindModels_Click" Padding="12,4" Margin="8,0,0,0"
+                                            ToolTip="Ask the service which models it has" />
+                                </StackPanel>
+                                <TextBlock x:Name="AiModelHint" Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource Row}">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="API key" VerticalAlignment="Top" Margin="0,7,0,0" />
+                            <StackPanel Grid.Column="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <PasswordBox x:Name="AiKey" Width="340" VerticalAlignment="Center" />
+                                    <Button Content="Save key" Click="SaveAiKey_Click" Padding="12,4" Margin="8,0,0,0" />
+                                </StackPanel>
+                                <TextBlock x:Name="AiKeyStatus" Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="160" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="Try it" VerticalAlignment="Top" Margin="0,7,0,0" />
+                            <StackPanel Grid.Column="1">
+                                <Button x:Name="TestAiButton" Content="Test" Click="TestAi_Click" Padding="16,4" HorizontalAlignment="Left"
+                                        Style="{StaticResource AccentButton}" />
+                                <TextBlock x:Name="AiTestStatus" Style="{StaticResource Hint}"
+                                           Text="Sends a one-line hello to check the address, key and model all work." />
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </ScrollViewer>
 

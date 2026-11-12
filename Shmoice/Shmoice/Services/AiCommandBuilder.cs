@@ -1,8 +1,4 @@
 using System.Text.Json;
-using Anthropic;
-using Anthropic.Exceptions;
-using Anthropic.Models.Beta;
-using Anthropic.Models.Beta.Messages;
 using Shmoice.Models;
 
 namespace Shmoice.Services;
@@ -12,13 +8,13 @@ public record AiDraft(string Phrase, string Explanation, List<ActionStep> Steps)
 
 /// <summary>
 /// Turns a plain-English description ("open Spotify and skip to the next song") into ActionSteps
-/// using Claude. Structured outputs force the reply to match our step schema, so the result can be
-/// loaded straight into the editor. Nothing runs automatically — the user reviews and tests first.
+/// using whichever AI service the user chose (see <see cref="AiClient"/>). Where the service supports
+/// structured output the reply is forced to match our step schema; elsewhere the prompt asks for the
+/// same JSON and <see cref="Parse"/> reads it leniently. Nothing runs automatically: the user reviews
+/// and tests first.
 /// </summary>
 public static class AiCommandBuilder
 {
-    private const string Model = "claude-opus-5-5";
-
     private static readonly string[] ActionTypeNames = ActionCatalog.All.Select(a => a.Type.ToString()).ToArray();
 
     /// <summary>The action list for the prompt, built from the same catalog the app's picker uses.</summary>
@@ -52,7 +48,7 @@ public static class AiCommandBuilder
         - HttpRequest parameter is "METHOD url | Header: value | body"; only the url is required, there can be several headers, and everything after the headers is the body. Method defaults to GET, or POST when there's a body. A body starting with { or [ is sent as JSON, and placeholders inside it are JSON-escaped, so write e.g. POST https://example.com/hook | {"text": "{heard}"}. Never invent URLs, tokens or API keys: if the user didn't give them, use an obvious stand-in like YOUR_TOKEN and say so in the explanation.
         - PickJson narrows a JSON {result} to one value by path, e.g. "main.temp" or "items[0].name". Typical chain: HttpRequest, PickJson, then Speak "It's {result} degrees".
         - RunPowerShell waits for the script and keeps its output as {result}; RunCommand doesn't wait and keeps nothing. Use RunPowerShell only when no dedicated type does the job.
-        - AskAi sends its parameter to Claude as a question and keeps a short spoken-style answer as {result}. E.g. "ask claude" = ListenForWords, AskAi "{heard}", Speak "{result}".
+        - AskAi sends its parameter to the AI as a question and keeps a short spoken-style answer as {result}. E.g. "ask the ai" = ListenForWords, AskAi "{heard}", Speak "{result}".
         - ContinueIf stops the command unless its condition is true. Form: "left operator right" with operator one of: is, is not, contains, does not contain, starts with, ends with, >, <, >=, <=; or "left is empty" / "left is not empty". E.g. "{app} is chrome", "{time} >= 18:00".
         - RunVoiceCommand runs another existing command by its exact phrase; only use it when the user names one.
         - AppendToFile parameter is "file | text", e.g. "%USERPROFILE%\Documents\notes.txt | {date} {time} {heard}".
@@ -67,6 +63,10 @@ public static class AiCommandBuilder
         - "explanation" is 1-3 plain sentences telling the user what the command does and any assumptions (e.g. which app must be focused, or that a program must be installed).
         - If the request can't be done with these step types, return an empty "steps" array and say why in "explanation".
         - If a step could lose data or disrupt the user (closing apps, shutting down, deleting), still produce it if asked, but call that out clearly in the explanation.
+
+        Reply with one JSON object and nothing else (no code fence, no text before or after), shaped exactly like this:
+        {"phrase": "open youtube", "explanation": "Opens YouTube in your browser.", "steps": [{"type": "OpenUrl", "parameter": "youtube.com", "repeat": 1}]}
+        Every step has all three fields: "type" is one of the step type names above, spelled exactly; "parameter" is a string ("" when the type takes none); "repeat" is a whole number.
         """;
 
     private static readonly Dictionary<string, JsonElement> Schema = new()
@@ -97,12 +97,8 @@ public static class AiCommandBuilder
         }),
     };
 
-    public static async Task<AiDraft> GenerateAsync(string apiKey, string description, CancellationToken ct = default) =>
-        Parse(await SendAsync(apiKey, SystemPrompt, description, new BetaOutputConfig
-        {
-            Effort = Effort.Medium,
-            Format = new BetaJsonOutputFormat { Schema = Schema },
-        }, ct));
+    public static async Task<AiDraft> GenerateAsync(AiConnection ai, string description, CancellationToken ct = default) =>
+        Parse(await AiClient.CompleteAsync(ai, SystemPrompt, description, Schema, quick: false, ct));
 
     private const string AnswerPrompt = """
         You answer questions for "Shmoice", a voice-command app on the user's Windows PC. Your answer is
@@ -112,68 +108,52 @@ public static class AiCommandBuilder
         clearly asks for longer text (e.g. "write an email saying…" or "summarize this").
         """;
 
-    /// <summary>For "Ask Claude" steps: a short plain-text answer to use as {result}.</summary>
-    public static async Task<string> AskAsync(string apiKey, string question, CancellationToken ct = default) =>
-        (await SendAsync(apiKey, AnswerPrompt, question, new BetaOutputConfig { Effort = Effort.Low }, ct)).Trim();
+    /// <summary>For "Ask AI" steps: a short plain-text answer to use as {result}.</summary>
+    public static async Task<string> AskAsync(AiConnection ai, string question, CancellationToken ct = default) =>
+        (await AiClient.CompleteAsync(ai, AnswerPrompt, question, jsonSchema: null, quick: true, ct)).Trim();
 
-    /// <summary>One request to Claude; returns the text of the reply.</summary>
-    private static async Task<string> SendAsync(string apiKey, string system, string user, BetaOutputConfig output, CancellationToken ct)
+    /// <summary>
+    /// Reads the model's reply. Services that support structured output send exactly the schema; others
+    /// only follow the prompt, so this accepts JSON inside a code fence or a sentence, missing fields,
+    /// numbers written as text, and skips any step whose type isn't one of ours.
+    /// </summary>
+    public static AiDraft Parse(string reply)
     {
-        var client = new AnthropicClient { ApiKey = apiKey };
-
-        BetaMessage response;
-        try
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(AiClient.ExtractJson(reply)); }
+        catch (JsonException)
         {
-            response = await client.Beta.Messages.Create(new MessageCreateParams
-            {
-                Model = Model,
-                MaxTokens = 16000,
-                // If a safety classifier declines, the API retries on a suitable fallback model in the same call.
-                Betas = [AnthropicBeta.ServerSideFallback2026_07_01],
-                Fallbacks = new Default(),
-                System = system,
-                OutputConfig = output,
-                Messages = [new BetaUserMessageParam { Content = user }],
-            }, ct);
-        }
-        catch (AnthropicUnauthorizedException)
-        {
-            throw new InvalidOperationException("The API key was rejected. Check it in the AI Builder tab.");
-        }
-        catch (AnthropicRateLimitException)
-        {
-            throw new InvalidOperationException("Rate limited by the API — wait a moment and try again.");
+            throw new InvalidOperationException("The model didn't answer in the format Shmoice needs. Try again, or pick a more capable model in Settings → AI.");
         }
 
-        if (response.StopReason == "refusal")
-            throw new InvalidOperationException("The model declined this request. Try describing it differently.");
-        if (response.StopReason == "max_tokens")
-            throw new InvalidOperationException("The response was cut off. Try a simpler request.");
-
-        return string.Concat(response.Content
-            .Select(b => b.TryPickText(out var t) ? t.Text : null)
-            .Where(t => t != null));
-    }
-
-    private static AiDraft Parse(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        var steps = new List<ActionStep>();
-        foreach (var s in root.GetProperty("steps").EnumerateArray())
+        using (doc)
         {
-            // Schema guarantees the enum, but skip anything unknown rather than crash.
-            if (!Enum.TryParse<ActionType>(s.GetProperty("type").GetString(), out var type) || type == ActionType.None) continue;
-            steps.Add(new ActionStep
-            {
-                Type = type,
-                Parameter = s.GetProperty("parameter").GetString() ?? "",
-                Repeat = s.GetProperty("repeat").GetInt32(),
-            });
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException("The model didn't answer in the format Shmoice needs. Try again, or pick a more capable model in Settings → AI.");
+
+            var steps = new List<ActionStep>();
+            if (root.TryGetProperty("steps", out var list) && list.ValueKind == JsonValueKind.Array)
+                foreach (var s in list.EnumerateArray())
+                {
+                    if (s.ValueKind != JsonValueKind.Object) continue;
+                    if (!Enum.TryParse<ActionType>(Text(s, "type"), ignoreCase: true, out var type) || type == ActionType.None
+                        || !Enum.IsDefined(type)) continue;
+                    steps.Add(new ActionStep { Type = type, Parameter = Text(s, "parameter"), Repeat = Number(s, "repeat") });
+                }
+            return new AiDraft(Text(root, "phrase").Trim(), Text(root, "explanation").Trim(), steps);
         }
-        return new AiDraft(
-            root.GetProperty("phrase").GetString()?.Trim() ?? "",
-            root.GetProperty("explanation").GetString()?.Trim() ?? "",
-            steps);
+
+        static string Text(JsonElement obj, string name) =>
+            !obj.TryGetProperty(name, out var value) ? ""
+            : value.ValueKind == JsonValueKind.String ? value.GetString() ?? ""
+            : value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? "" : value.GetRawText();
+
+        static int Number(JsonElement obj, string name)
+        {
+            if (!obj.TryGetProperty(name, out var value)) return 1;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var n)) return (int)Math.Clamp(n, 1, 100);
+            return value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out var parsed) ? Math.Clamp(parsed, 1, 100) : 1;
+        }
     }
 }

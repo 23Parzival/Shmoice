@@ -17,8 +17,8 @@ public static class ActionExecutor
     /// <summary>Set by the app: finds one of the user's commands by its phrase, for "Run another command" steps.</summary>
     public static Func<string, VoiceCommand?>? FindCommand { get; set; }
 
-    /// <summary>Set by the app: the Anthropic API key ("" if none), for "Ask Claude" steps.</summary>
-    public static Func<string>? GetApiKey { get; set; }
+    /// <summary>Set by the app: the AI service chosen in Settings, for "Ask AI" steps. Throws, saying what is missing, if it is not set up.</summary>
+    public static Func<AiConnection>? GetAi { get; set; }
 
     /// <summary>Set by the app: writes a line to the activity log. May be called from a background thread.</summary>
     public static Action<string>? Log { get; set; }
@@ -27,7 +27,7 @@ public static class ActionExecutor
     private sealed class RunContext
     {
         public string Heard = "";  // what the last "Listen for words" step heard
-        public string Result = ""; // output of the last web request, script, Ask Claude or Pick value step
+        public string Result = ""; // output of the last web request, script, Ask AI or Pick value step
         public int Depth;          // how many "Run another command" steps deep we are
     }
 
@@ -82,9 +82,8 @@ public static class ActionExecutor
             case ActionType.AskAi:
                 var question = fill(step.Parameter);
                 if (string.IsNullOrWhiteSpace(question)) throw new ArgumentException("Enter a question to ask.");
-                var apiKey = GetApiKey?.Invoke() ?? "";
-                if (apiKey.Length == 0) throw new InvalidOperationException("Ask Claude needs your Anthropic API key. Add it in the AI Builder tab.");
-                context.Result = await AiCommandBuilder.AskAsync(apiKey, question);
+                var ai = GetAi?.Invoke() ?? throw new InvalidOperationException("Ask AI isn't available.");
+                context.Result = await AiCommandBuilder.AskAsync(ai, question);
                 return true;
             case ActionType.ContinueIf:
                 if (!AdvancedActions.Evaluate(step.Parameter, fill)) throw new StopCommandException();
@@ -129,7 +128,7 @@ public static class ActionExecutor
 
     /// <summary>
     /// Replaces the placeholders a parameter can use: {heard} (Listen for words), {result} (last web
-    /// request / script / Ask Claude), {clipboard}, {date} (2026-01-31), {time} (18:05) and {app}
+    /// request / script / Ask AI), {clipboard}, {date} (2026-01-31), {time} (18:05) and {app}
     /// (the app in front, e.g. chrome). Done in one pass, so a value is never itself filled in again.
     /// </summary>
     private static string Fill(string template, RunContext context, Func<string, string>? encode = null)

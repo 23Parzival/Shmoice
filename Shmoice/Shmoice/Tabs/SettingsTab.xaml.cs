@@ -28,6 +28,185 @@ public partial class SettingsTab : UserControl
         StartWithWindows.IsChecked = StartupRegistration.IsEnabled;
         MicText.Text = Host?.MicrophoneName ?? "";
         RefreshAppearance();
+        RefreshAi();
+    }
+
+    // ---- AI --------------------------------------------------------------------------------
+
+    private const int AiSectionIndex = 4; // position in the sidebar
+
+    private bool _updatingAi; // true while filling the controls from the saved settings
+
+    /// <summary>Opens the AI section (the AI Builder tab's "Change" button).</summary>
+    public void ShowAiSection() => Sections.SelectedIndex = AiSectionIndex;
+
+    private AiProvider CurrentProvider => AiProviders.Get(Host?.Data.Settings.AiProvider);
+
+    private Models.AiProviderConfig? CurrentConfig =>
+        Host == null ? null : AiProviders.ConfigFor(Host.Data.Settings, CurrentProvider);
+
+    /// <summary>Shows the chosen service and what's saved for it.</summary>
+    private void RefreshAi()
+    {
+        if (Host == null || CurrentConfig is not { } config) return;
+        var provider = CurrentProvider;
+        _updatingAi = true;
+        try
+        {
+            if (AiProviderCombo.ItemsSource == null) AiProviderCombo.ItemsSource = AiProviders.All;
+            AiProviderCombo.SelectedItem = provider;
+            AiNote.Text = provider.Note;
+
+            var openAi = provider.Kind == AiApiKind.OpenAiCompatible;
+            AiAddressRow.Visibility = openAi ? Visibility.Visible : Visibility.Collapsed;
+            AiAddress.Text = config.BaseUrl.Length > 0 ? config.BaseUrl : provider.DefaultBaseUrl;
+            AiAddressHint.Text = provider.Id == AiProviders.CustomId
+                ? "The service's address up to and including /v1, e.g. http://localhost:8080/v1 or http://192.168.1.20:5000/v1."
+                : "Filled in for you. Change it only if yours is somewhere else, e.g. on another PC.";
+
+            FindModelsButton.Visibility = openAi ? Visibility.Visible : Visibility.Collapsed;
+            AiModel.ItemsSource = provider.SuggestedModels;
+            AiModel.Text = config.Model;
+            AiModelHint.Text = provider.DefaultModel.Length > 0
+                ? $"Leave empty to use {provider.DefaultModel}."
+                : "Press Find models to choose from what the service has, or type the model's name.";
+
+            AiKey.Clear();
+            RefreshAiKeyStatus();
+            AiTestStatus.Text = "Sends a one-line hello to check the address, key and model all work.";
+        }
+        finally { _updatingAi = false; }
+    }
+
+    private void RefreshAiKeyStatus()
+    {
+        if (CurrentConfig is not { } config) return;
+        var provider = CurrentProvider;
+        if (SecretStore.Unprotect(config.EncryptedApiKey).Length > 0)
+            AiKeyStatus.Text = "✓ Key saved (encrypted for your Windows account). Paste a new one to replace it, or save an empty box to remove it.";
+        else if (AiProviders.ApiKey(provider, config).Length > 0)
+            AiKeyStatus.Text = "✓ Using the ANTHROPIC_API_KEY environment variable.";
+        else
+            AiKeyStatus.Text = provider.Local
+                ? "Not needed for most models running on your own PC. Leave it empty unless yours asks for one."
+                : "No key yet. Paste it here and press Save key.";
+    }
+
+    /// <summary>Something in this section changed: save it and update the summary on the AI Builder tab.</summary>
+    private void AiChanged()
+    {
+        Host?.SaveQuietly();
+        Host?.UpdateAiStatus();
+    }
+
+    private void AiProvider_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_updatingAi || Host == null || AiProviderCombo.SelectedItem is not AiProvider provider) return;
+        Host.Data.Settings.AiProvider = provider.Id;
+        RefreshAi();
+        AiChanged();
+        e.Handled = true; // don't let it look like the sidebar selection changed
+    }
+
+    private void AiAddress_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_updatingAi || CurrentConfig is not { } config) return;
+        var provider = CurrentProvider;
+        var typed = AiAddress.Text.Trim();
+        var address = AiProviders.NormalizeBaseUrl(typed);
+        if (typed.Length > 0 && address.Length == 0)
+        {
+            AiAddressHint.Text = $"“{typed}” isn't a web address. Use something like http://localhost:11434/v1.";
+            return;
+        }
+        // Saved empty when it's just the default, so a future default change is picked up.
+        var toSave = address == provider.DefaultBaseUrl ? "" : address;
+        if (toSave == config.BaseUrl) { AiAddress.Text = address.Length > 0 ? address : provider.DefaultBaseUrl; return; }
+        config.BaseUrl = toSave;
+        RefreshAi();
+        AiChanged();
+    }
+
+    private void AiModel_Changed(object sender, EventArgs e)
+    {
+        if (_updatingAi || CurrentConfig is not { } config) return;
+        // Picking from the list updates Text a moment after SelectionChanged, so prefer the picked item.
+        var model = (e is SelectionChangedEventArgs && AiModel.SelectedItem is string picked ? picked : AiModel.Text).Trim();
+        if (e is SelectionChangedEventArgs s) s.Handled = true;
+        if (model == config.Model) return;
+        config.Model = model;
+        AiChanged();
+    }
+
+    private async void FindModels_Click(object sender, RoutedEventArgs e)
+    {
+        if (Host == null) return;
+        FindModelsButton.IsEnabled = false;
+        AiModelHint.Text = "Asking the service for its models…";
+        try
+        {
+            var models = await AiClient.ListModelsAsync(AiProviders.Connect(Host.Data.Settings, needModel: false));
+            if (models.Count == 0)
+            {
+                AiModelHint.Text = "The service has no models yet. Download or load one first, then try again.";
+                return;
+            }
+            var current = AiModel.Text;
+            _updatingAi = true;
+            try { AiModel.ItemsSource = models; AiModel.Text = current; }
+            finally { _updatingAi = false; }
+            AiModelHint.Text = models.Count == 1 ? "Found 1 model. Open the list to pick it." : $"Found {models.Count} models. Open the list to pick one.";
+            AiModel.Focus();
+            AiModel.IsDropDownOpen = true;
+        }
+        catch (Exception ex)
+        {
+            AiModelHint.Text = ex.Message;
+        }
+        finally { FindModelsButton.IsEnabled = true; }
+    }
+
+    private void SaveAiKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentConfig is not { } config) return;
+        var key = AiKey.Password.Trim();
+        config.EncryptedApiKey = SecretStore.Protect(key);
+        AiKey.Clear();
+        RefreshAiKeyStatus();
+        AiChanged();
+        Host?.Log(key.Length > 0 ? $"{CurrentProvider.Name} API key saved" : $"{CurrentProvider.Name} API key removed");
+    }
+
+    private async void TestAi_Click(object sender, RoutedEventArgs e)
+    {
+        if (Host == null) return;
+        // Pick up a model or address still being typed.
+        AiModel_Changed(AiModel, EventArgs.Empty);
+        AiConnection ai;
+        try { ai = AiProviders.Connect(Host.Data.Settings); }
+        catch (Exception ex) { AiTestStatus.Text = ex.Message; return; }
+
+        TestAiButton.IsEnabled = false;
+        AiTestStatus.Text = $"Asking {ai.Model}… (a model on your own PC can take a while the first time)";
+        var watch = Stopwatch.StartNew();
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+            var reply = await AiClient.CompleteAsync(ai, "You are being tested from a settings page. Reply with one short friendly sentence.",
+                "Say hello.", quick: true, ct: timeout.Token);
+            reply = reply.ReplaceLineEndings(" ").Trim();
+            if (reply.Length > 160) reply = reply[..160] + "…";
+            AiTestStatus.Text = $"✓ Working. {ai.Model} answered in {watch.Elapsed.TotalSeconds:0.0} s: “{reply}”";
+        }
+        catch (OperationCanceledException)
+        {
+            AiTestStatus.Text = "No answer after 3 minutes. Is the model loaded?";
+        }
+        catch (Exception ex)
+        {
+            AiTestStatus.Text = "✗ " + ex.Message;
+        }
+        finally { TestAiButton.IsEnabled = true; }
     }
 
     // ---- Appearance ----------------------------------------------------------------------
@@ -109,7 +288,7 @@ public partial class SettingsTab : UserControl
     private void Sections_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (AboutSection == null) return; // still loading
-        var sections = new[] { ListeningSection, AppearanceSection, StartupSection, CommandsSection, AboutSection };
+        var sections = new[] { ListeningSection, AppearanceSection, StartupSection, CommandsSection, AiSection, AboutSection };
         for (var i = 0; i < sections.Length; i++)
             sections[i].Visibility = i == Sections.SelectedIndex ? Visibility.Visible : Visibility.Collapsed;
     }

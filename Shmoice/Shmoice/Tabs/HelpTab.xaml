@@ -77,8 +77,8 @@
                     </TextBlock>
                     <TextBlock Style="{StaticResource P}">
                         <Bold>Run PowerShell script</Bold> waits for the script and keeps what it prints as the result.
-                        <Bold>Ask Claude</Bold> sends a question (often <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run>) and keeps the short
-                        answer; follow it with Say something or Paste text. It uses your API key from the AI Builder tab.
+                        <Bold>Ask AI</Bold> sends a question (often <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run>) and keeps the short
+                        answer; follow it with Say something or Paste text. It uses the AI chosen in Settings → AI.
                         <Bold>Add line to file</Bold> keeps a log or notes file: <Run FontFamily="Cascadia Mono, Consolas">C:\notes.txt | {date} {time} {heard}</Run>.
                     </TextBlock>
                     <TextBlock Style="{StaticResource P}">
@@ -114,8 +114,16 @@
 
                     <TextBlock Style="{StaticResource H}" Text="AI Builder" />
                     <TextBlock Style="{StaticResource P}">
-                        Describe a command in plain words and Claude builds the steps. Nothing runs or saves until you test it and add it.
-                        It needs your own Anthropic API key, which is stored encrypted for your Windows account.
+                        Describe a command in plain words and an AI builds the steps. Nothing runs or saves until you test it and add it.
+                        The same AI answers “Ask AI” steps.
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource P}">
+                        <Bold>Choosing the AI.</Bold> Under <Bold>Settings → AI</Bold>, pick the service to use: Anthropic, OpenAI, Google Gemini,
+                        OpenRouter, Groq, Mistral, DeepSeek or xAI with your own API key, or a model running on your own PC with
+                        Ollama or LM Studio, which is free and keeps everything on your machine. <Bold>Custom</Bold> takes the address of
+                        anything else that speaks the OpenAI chat API. Press <Bold>Find models</Bold> to pick a model, then <Bold>Test</Bold>
+                        to check it works. Keys are stored encrypted for your Windows account. Small local models can struggle to
+                        build commands; if the result is poor, try a larger one.
                     </TextBlock>
 
                     <TextBlock Style="{StaticResource H}" Text="Updates" />

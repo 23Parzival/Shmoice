@@ -15,7 +15,7 @@ Say the wake word, then a command: *"computer, next song"*. Each command is a li
     `POST https://example.com/hook | Authorization: Bearer abc | {"text": "{heard}"}`
   - **Pick value from result**: pull one value out of a JSON reply, e.g. `main.temp`.
   - **Run PowerShell script**: run a script and use what it prints.
-  - **Ask Claude**: ask a question and say, type or paste the answer.
+  - **Ask AI**: ask a question and say, type or paste the answer.
   - **Continue only if…**: stop unless a condition holds, e.g. `{app} is chrome` or `{time} >= 18:00`.
   - **Run another command**: build big commands out of small ones.
   - **Add line to file**: keep a notes or log file.
@@ -24,7 +24,8 @@ Steps can use `{heard}`, `{result}` (the last web reply, script output or answer
 
 ## Also included
 
-- **AI Builder**: describe a command in plain words and Claude writes the steps (needs your own Anthropic API key).
+- **AI Builder**: describe a command in plain words and an AI writes the steps.
+- **Your choice of AI**: Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, Mistral, DeepSeek or xAI with your own key, a model on your own PC through Ollama or LM Studio, or any other OpenAI-compatible address.
 - **Profiles**: commands that only run while certain apps are in front.
 - **Schedules**: run commands at a time of day or every so many minutes.
 - **History** and **Voice test** to see what was heard and why something did or didn't run.
