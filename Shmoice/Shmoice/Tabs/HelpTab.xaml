@@ -54,6 +54,50 @@
                         For example “search” = Listen for words, then Search YouTube with <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run>.
                     </TextBlock>
 
+                    <TextBlock Style="{StaticResource H}" Text="Advanced: web requests, scripts and more" />
+                    <TextBlock Style="{StaticResource P}">
+                        The <Bold>Advanced</Bold> actions let a command talk to other things and react to the answer. Several of them produce a
+                        <Bold>result</Bold>, which later steps use by writing <Run FontFamily="Cascadia Mono, Consolas">{result}</Run>.
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource P}">
+                        <Bold>Send web request (HTTP)</Bold> calls a webhook, smart-home hub or API. Write the method and link, then any headers,
+                        then the body, separated by <Run FontFamily="Cascadia Mono, Consolas">|</Run>:<LineBreak />
+                        <Run FontFamily="Cascadia Mono, Consolas">POST https://example.com/hook | Authorization: Bearer abc | {"text": "{heard}"}</Run><LineBreak />
+                        Only the link is needed: a plain link is a GET, and adding a body makes it a POST. A body that starts with
+                        <Run FontFamily="Cascadia Mono, Consolas">{</Run> is sent as JSON. The reply becomes
+                        <Run FontFamily="Cascadia Mono, Consolas">{result}</Run>. Links without http:// are opened as https://, so write
+                        <Run FontFamily="Cascadia Mono, Consolas">http://</Run> in full for devices on your own network. Tokens you put in a
+                        header are saved as plain text in your commands file.
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource P}">
+                        <Bold>Pick value from result</Bold> pulls one value out of a JSON reply, e.g.
+                        <Run FontFamily="Cascadia Mono, Consolas">main.temp</Run> or <Run FontFamily="Cascadia Mono, Consolas">items[0].name</Run>.
+                        So “weather” can be: Send web request → Pick value <Run FontFamily="Cascadia Mono, Consolas">main.temp</Run> →
+                        Say something <Run FontFamily="Cascadia Mono, Consolas">It's {result} degrees</Run>.
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource P}">
+                        <Bold>Run PowerShell script</Bold> waits for the script and keeps what it prints as the result.
+                        <Bold>Ask Claude</Bold> sends a question (often <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run>) and keeps the short
+                        answer; follow it with Say something or Paste text. It uses your API key from the AI Builder tab.
+                        <Bold>Add line to file</Bold> keeps a log or notes file: <Run FontFamily="Cascadia Mono, Consolas">C:\notes.txt | {date} {time} {heard}</Run>.
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource P}">
+                        <Bold>Continue only if…</Bold> stops the command unless a condition is true, e.g.
+                        <Run FontFamily="Cascadia Mono, Consolas">{app} is chrome</Run>,
+                        <Run FontFamily="Cascadia Mono, Consolas">{result} contains rain</Run> or
+                        <Run FontFamily="Cascadia Mono, Consolas">{time} >= 18:00</Run>.
+                        <Bold>Run another command</Bold> runs the steps of a command you already made, so big commands can be built from small ones.
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource P}">
+                        Words you can write in any step's parameter:
+                        <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run> what Listen for words heard ·
+                        <Run FontFamily="Cascadia Mono, Consolas">{result}</Run> the last result ·
+                        <Run FontFamily="Cascadia Mono, Consolas">{clipboard}</Run> the copied text ·
+                        <Run FontFamily="Cascadia Mono, Consolas">{date}</Run> like 2026-01-31 ·
+                        <Run FontFamily="Cascadia Mono, Consolas">{time}</Run> like 18:05 ·
+                        <Run FontFamily="Cascadia Mono, Consolas">{app}</Run> the app in front, like chrome.
+                    </TextBlock>
+
                     <TextBlock Style="{StaticResource H}" Text="Profiles: commands for specific apps" />
                     <TextBlock Style="{StaticResource P}">
                         A profile is a list of apps, like “eldenring” or “chrome, firefox”. Commands in a profile only run while one of those

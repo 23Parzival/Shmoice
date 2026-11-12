@@ -51,7 +51,9 @@
                     <local:ActionPicker Grid.Column="0" SelectedType="{Binding Type}" VerticalAlignment="Center" />
 
                     <Grid Grid.Column="2" VerticalAlignment="Center">
-                        <TextBox x:Name="ParamBox" Text="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding NeedsParameter}" />
+                        <!-- The tooltip shows the whole parameter: web requests and scripts are often wider than the box. -->
+                        <TextBox x:Name="ParamBox" Text="{Binding Parameter, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding NeedsParameter}"
+                                 ToolTip="{Binding ParameterTip}" />
                         <!-- "Press keys" records the keys you press instead of typing them. -->
                         <local:KeyRecorder x:Name="KeyBox" Combo="{Binding Parameter, Mode=TwoWay}" Visibility="Collapsed" />
                         <TextBlock x:Name="Hint" Text="{Binding ParameterHint}" IsHitTestVisible="False" Visibility="Collapsed"
@@ -385,6 +387,14 @@
                                             steps can use it by writing <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run>, like
                                             Search YouTube → <Run FontFamily="Cascadia Mono, Consolas">{heard}</Run> or
                                             Type text → <Run FontFamily="Cascadia Mono, Consolas">Note: {heard}</Run>.
+                                        </TextBlock>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
+                                            • <Run FontWeight="SemiBold">Advanced:</Run> Send web request is written
+                                            <Run FontFamily="Cascadia Mono, Consolas">POST https://… | Header: value | body</Run>. Its reply, a
+                                            script's output or Claude's answer is the <Run FontFamily="Cascadia Mono, Consolas">{result}</Run>
+                                            for later steps. You can also write <Run FontFamily="Cascadia Mono, Consolas">{clipboard}</Run>,
+                                            <Run FontFamily="Cascadia Mono, Consolas">{date}</Run>, <Run FontFamily="Cascadia Mono, Consolas">{time}</Run>
+                                            and <Run FontFamily="Cascadia Mono, Consolas">{app}</Run>. More in the Help tab.
                                         </TextBlock>
                                         <TextBlock TextWrapping="Wrap">
                                             • <Run FontWeight="SemiBold">Finding an action:</Run> open the action list and type to search,

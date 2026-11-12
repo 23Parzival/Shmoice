@@ -42,6 +42,10 @@ public partial class MainWindow : Window
         _listener.Recognized += (phrase, confidence) => Dispatcher.Invoke(() => OnHeard(phrase, confidence));
         _listener.LowConfidence += (phrase, confidence) => Dispatcher.Invoke(() => OnLowConfidence(phrase, confidence));
         ActionExecutor.ListenForWords = ListenForWordsAsync;
+        // Commands run on a background thread, so these hop to the UI thread to read the data.
+        ActionExecutor.FindCommand = phrase => Dispatcher.Invoke(() => FindCommandByPhrase(phrase));
+        ActionExecutor.GetApiKey = () => Dispatcher.Invoke(GetApiKey);
+        ActionExecutor.Log = message => Dispatcher.BeginInvoke(() => Log(message));
 
         if (_data.Commands.Count > 0) CommandList.SelectedIndex = 0;
         UpdateEditorState();
@@ -245,6 +249,20 @@ public partial class MainWindow : Window
     }
 
     private Task Run(VoiceCommand command) => RunCommandAsync(command, RunSource.Test);
+
+    /// <summary>
+    /// For "Run another command" steps. When several commands share the phrase (one per profile), the
+    /// one that would run if you said it now is used; otherwise the first with that phrase.
+    /// </summary>
+    private VoiceCommand? FindCommandByPhrase(string phrase)
+    {
+        var matches = _data.Commands
+            .Where(c => string.Equals(c.Phrase.Trim(), phrase.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (matches.Count <= 1) return matches.FirstOrDefault();
+        var (toRun, _) = ApplyProfiles(matches.Where(c => c.Enabled).ToList(), ForegroundApp.ProcessName());
+        return toRun.FirstOrDefault() ?? matches[0];
+    }
 
     // ---- Schedules ----------------------------------------------------------------------
 

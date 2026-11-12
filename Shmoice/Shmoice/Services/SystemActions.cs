@@ -81,6 +81,20 @@ public static class SystemActions
         });
     }
 
+    /// <summary>The text on the clipboard, or "" if it holds something else (or nothing).</summary>
+    public static string GetClipboardText()
+    {
+        if (Application.Current == null) return "";
+        return Application.Current.Dispatcher.Invoke(() =>
+        {
+            for (var attempt = 0; ; attempt++)
+            {
+                try { return Clipboard.ContainsText() ? Clipboard.GetText() : ""; }
+                catch (COMException) when (attempt < 5) { Thread.Sleep(50); }
+            }
+        });
+    }
+
     public static void Speak(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) throw new ArgumentException("Say something needs some text to say.");

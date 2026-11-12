@@ -21,7 +21,7 @@ public enum ActionType
     VolumeUp, VolumeDown, VolumeMute, Mute, Unmute, SetVolume, MicMuteToggle, MicMute, MicUnmute,
 
     // Keyboard & text
-    KeyCombo, TypeText, CopyText, Copy, Cut, Paste, Undo, Redo, SelectAll, PressEnter, PressEscape,
+    KeyCombo, HoldKeys, ReleaseKeys, TypeText, PasteText, CopyText, Copy, Cut, Paste, Undo, Redo, SelectAll, PressEnter, PressEscape,
 
     // Mouse
     MouseClick, MouseRightClick, MouseDoubleClick, MouseMiddleClick,
@@ -49,6 +49,22 @@ public enum ActionType
 
     // Other
     Speak, SayTime, ShowMessage, RunCommand, Wait,
+
+    // Advanced: these produce or use {result}
+    /// <summary>Sends an HTTP request; the reply becomes {result}.</summary>
+    HttpRequest,
+    /// <summary>Replaces {result} (JSON) with one value from it, e.g. "main.temp".</summary>
+    PickJson,
+    /// <summary>Runs a PowerShell script and waits; its output becomes {result}.</summary>
+    RunPowerShell,
+    /// <summary>Asks Claude a question; the answer becomes {result}.</summary>
+    AskAi,
+    /// <summary>Stops the command (quietly) unless the condition holds, e.g. "{app} is chrome".</summary>
+    ContinueIf,
+    /// <summary>Runs another command's steps. Parameter: its phrase.</summary>
+    RunVoiceCommand,
+    /// <summary>Adds a line to a text file. Parameter: "path | text".</summary>
+    AppendToFile,
 }
 
 /// <summary>What the parameter box accepts for an action.</summary>
@@ -64,9 +80,12 @@ public static class ActionCatalog
     /// <summary>Placeholder that later steps use for what a "Listen for words" step heard.</summary>
     public const string HeardPlaceholder = "{heard}";
 
+    /// <summary>Placeholder for the output of the last web request, PowerShell script, Ask Claude or Pick-from-result step.</summary>
+    public const string ResultPlaceholder = "{result}";
+
     private const string Voice = "Voice input", Media = "Media", Audio = "Volume & audio", Keys = "Keyboard & text", Mouse = "Mouse",
         Browser = "Browser", Apps = "Apps", Window = "Window controls", Desktops = "Virtual desktops",
-        Sys = "System", Power = "Power", Other = "Other";
+        Sys = "System", Power = "Power", Other = "Other", Advanced = "Advanced";
 
     /// <summary>Every action, in the order shown in the picker.</summary>
     public static IReadOnlyList<ActionInfo> All { get; } =
@@ -94,7 +113,12 @@ public static class ActionCatalog
         new(ActionType.MicUnmute, Audio, "Unmute mic", "Unmutes your default microphone."),
 
         new(ActionType.KeyCombo, Keys, "Press keys", "Presses a key or shortcut, like Alt+Z.", ParamKind.Keys, "Click to record keys"),
+        new(ActionType.HoldKeys, Keys, "Hold keys down", "Presses keys and keeps them held (e.g. W to keep walking in a game) until a Release keys step, in this or another command.",
+            ParamKind.Keys, "Click to record keys"),
+        new(ActionType.ReleaseKeys, Keys, "Release keys", "Lets go of keys held by Hold keys down.", ParamKind.Keys, "Click to record keys"),
         new(ActionType.TypeText, Keys, "Type text", "Types the text into the focused window.", ParamKind.Text, "Text to type"),
+        new(ActionType.PasteText, Keys, "Paste text", "Pastes the text into the focused window in one go (faster than typing for long text). Replaces what's on the clipboard.",
+            ParamKind.Text, "Text to paste, e.g. {result}"),
         new(ActionType.CopyText, Keys, "Copy text to clipboard", "Puts the text on the clipboard (doesn't paste it).", ParamKind.Text, "Text to copy"),
         new(ActionType.Copy, Keys, "Copy", "Copies the selection (Ctrl+C).", Combo: "ctrl+c"),
         new(ActionType.Cut, Keys, "Cut", "Cuts the selection (Ctrl+X).", Combo: "ctrl+x"),
@@ -181,6 +205,29 @@ public static class ActionCatalog
         new(ActionType.RunCommand, Other, "Run command", "Runs a command-line command in the background, with no window.",
             ParamKind.Text, "e.g. ipconfig /flushdns"),
         new(ActionType.Wait, Other, "Wait", "Pauses before the next step.", ParamKind.Decimal, "Seconds, e.g. 1.5"),
+
+        new(ActionType.HttpRequest, Advanced, "Send web request (HTTP)",
+            "Calls a web address, e.g. a webhook, smart-home hub or API. Write: METHOD link | Header: value | body. " +
+            "Only the link is required; headers and body are optional. The reply is kept as {result} for later steps. Fails if the server answers with an error.",
+            ParamKind.Text, "e.g. POST https://example.com/hook | Authorization: Bearer abc | {\"text\": \"{heard}\"}"),
+        new(ActionType.PickJson, Advanced, "Pick value from result",
+            "When {result} is JSON (most APIs), replaces it with one value from inside it. Use dots and [numbers] to reach it, e.g. main.temp or items[0].name.",
+            ParamKind.Text, "Path, e.g. main.temp or items[0].name"),
+        new(ActionType.RunPowerShell, Advanced, "Run PowerShell script",
+            "Runs PowerShell with no window and waits for it to finish (up to 60 seconds). What it prints is kept as {result}. Fails if the script reports an error.",
+            ParamKind.Text, "e.g. (Get-Date).DayOfWeek"),
+        new(ActionType.AskAi, Advanced, "Ask Claude",
+            "Sends a question to Claude and keeps the short answer as {result}, e.g. to say aloud or paste. Uses your Anthropic API key from the AI Builder tab.",
+            ParamKind.Text, "Question, e.g. {heard} or Summarize this: {clipboard}"),
+        new(ActionType.ContinueIf, Advanced, "Continue only if…",
+            "Stops the command here unless the condition is true. Write two values with one of: is, is not, contains, does not contain, starts with, ends with, >, <, is empty, is not empty.",
+            ParamKind.Text, "e.g. {app} is chrome   or   {result} contains rain   or   {time} > 18:00"),
+        new(ActionType.RunVoiceCommand, Advanced, "Run another command",
+            "Runs the steps of another of your commands, so commands can be built from smaller ones. {heard} and {result} carry over.",
+            ParamKind.Text, "The other command's phrase, e.g. volume up"),
+        new(ActionType.AppendToFile, Advanced, "Add line to file",
+            "Adds a line of text to the end of a text file, creating the file if needed. Write: file | text.",
+            ParamKind.Text, "e.g. %USERPROFILE%\\Documents\\notes.txt | {date} {time}  {heard}"),
     ];
 
     private static readonly Dictionary<ActionType, ActionInfo> ByType = All.ToDictionary(a => a.Type);
@@ -211,6 +258,7 @@ public class ActionStep : ObservableObject
             OnPropertyChanged(nameof(NeedsParameter));
             OnPropertyChanged(nameof(ParameterKind));
             OnPropertyChanged(nameof(ParameterHint));
+            OnPropertyChanged(nameof(ParameterTip));
         }
     }
 
@@ -225,7 +273,15 @@ public class ActionStep : ObservableObject
     [System.Text.Json.Serialization.JsonIgnore]
     public string ParameterHint => ActionCatalog.Get(Type).Hint ?? "No parameter needed";
 
-    public string Parameter { get => _parameter; set => Set(ref _parameter, value ?? ""); }
+    public string Parameter
+    {
+        get => _parameter;
+        set { if (Set(ref _parameter, value ?? "")) OnPropertyChanged(nameof(ParameterTip)); }
+    }
+
+    /// <summary>Tooltip for the parameter box: what's typed (it can be wider than the box), or the hint while empty. Null = no tooltip.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ParameterTip => !NeedsParameter ? null : Parameter.Length > 0 ? Parameter : ParameterHint;
 
     /// <summary>How many times to run this step (e.g. VolumeUp x5 = +10%).</summary>
     public int Repeat { get => _repeat; set => Set(ref _repeat, Math.Clamp(value, 1, 100)); }

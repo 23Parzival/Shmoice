@@ -14,25 +14,95 @@ public static class ActionExecutor
     /// </summary>
     public static Func<TimeSpan, Task<string>>? ListenForWords { get; set; }
 
+    /// <summary>Set by the app: finds one of the user's commands by its phrase, for "Run another command" steps.</summary>
+    public static Func<string, VoiceCommand?>? FindCommand { get; set; }
+
+    /// <summary>Set by the app: the Anthropic API key ("" if none), for "Ask Claude" steps.</summary>
+    public static Func<string>? GetApiKey { get; set; }
+
+    /// <summary>Set by the app: writes a line to the activity log. May be called from a background thread.</summary>
+    public static Action<string>? Log { get; set; }
+
+    /// <summary>What the steps of one run share: the values behind {heard} and {result}.</summary>
+    private sealed class RunContext
+    {
+        public string Heard = "";  // what the last "Listen for words" step heard
+        public string Result = ""; // output of the last web request, script, Ask Claude or Pick value step
+        public int Depth;          // how many "Run another command" steps deep we are
+    }
+
+    /// <summary>Thrown by "Continue only if…" to end the command early. Not a failure.</summary>
+    private sealed class StopCommandException : Exception;
+
     /// <summary>Runs every step in order. Returns what a "Listen for words" step heard ("" if none).</summary>
     public static Task<string> RunAsync(VoiceCommand command) => Task.Run(async () =>
     {
-        var heard = ""; // what the last "Listen for words" step heard; steps use it as {heard}
+        var context = new RunContext();
+        try { await RunStepsAsync(command, context); }
+        catch (StopCommandException) { Log?.Invoke($"\"{command.Phrase}\" stopped early: its condition wasn't met"); }
+        return context.Heard;
+    });
+
+    private static async Task RunStepsAsync(VoiceCommand command, RunContext context)
+    {
         foreach (var step in command.Steps.ToList())
         {
             if (step.Type == ActionType.ListenForWords)
             {
-                heard = await ListenAsync(step.Parameter);
+                context.Heard = await ListenAsync(step.Parameter);
                 continue;
             }
             for (var i = 0; i < step.Repeat; i++)
             {
-                await RunStepAsync(step, FillIn(step, heard));
+                if (!await RunAdvancedStepAsync(step, context))
+                    await RunStepAsync(step, FillIn(step, context));
                 if (step.Repeat > 1) await Task.Delay(30);
             }
         }
-        return heard;
-    });
+    }
+
+    /// <summary>
+    /// The steps that read or write the run's context ({result}, other commands) or fill in their own
+    /// placeholders. Returns false for every other step, which <see cref="RunStepAsync"/> handles.
+    /// </summary>
+    private static async Task<bool> RunAdvancedStepAsync(ActionStep step, RunContext context)
+    {
+        AdvancedActions.Filler fill = (template, encode) => Fill(template, context, encode);
+        switch (step.Type)
+        {
+            case ActionType.HttpRequest:
+                context.Result = await AdvancedActions.SendAsync(AdvancedActions.ParseRequest(step.Parameter, fill));
+                return true;
+            case ActionType.PickJson:
+                context.Result = AdvancedActions.PickJson(context.Result, fill(step.Parameter));
+                return true;
+            case ActionType.RunPowerShell:
+                context.Result = await AdvancedActions.RunPowerShellAsync(fill(step.Parameter));
+                return true;
+            case ActionType.AskAi:
+                var question = fill(step.Parameter);
+                if (string.IsNullOrWhiteSpace(question)) throw new ArgumentException("Enter a question to ask.");
+                var apiKey = GetApiKey?.Invoke() ?? "";
+                if (apiKey.Length == 0) throw new InvalidOperationException("Ask Claude needs your Anthropic API key. Add it in the AI Builder tab.");
+                context.Result = await AiCommandBuilder.AskAsync(apiKey, question);
+                return true;
+            case ActionType.ContinueIf:
+                if (!AdvancedActions.Evaluate(step.Parameter, fill)) throw new StopCommandException();
+                return true;
+            case ActionType.RunVoiceCommand:
+                var phrase = fill(step.Parameter).Trim();
+                if (phrase.Length == 0) throw new ArgumentException("Enter the phrase of the command to run.");
+                var other = FindCommand?.Invoke(phrase)
+                    ?? throw new InvalidOperationException($"There's no command called \"{phrase}\".");
+                if (context.Depth >= 5) throw new InvalidOperationException("Commands are running each other in a loop.");
+                context.Depth++;
+                try { await RunStepsAsync(other, context); }
+                finally { context.Depth--; }
+                return true;
+            default:
+                return false;
+        }
+    }
 
     private static async Task<string> ListenAsync(string secondsText)
     {
@@ -44,15 +114,40 @@ public static class ActionExecutor
         return words;
     }
 
-    /// <summary>Puts what was heard into the step's parameter wherever it says {heard} (URL-encoded inside links).</summary>
-    private static string FillIn(ActionStep step, string heard)
+    private static readonly System.Text.RegularExpressions.Regex Placeholder = new(
+        @"\{(heard|result|clipboard|date|time|app)\}", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>Fills in the step's parameter (values are URL-encoded inside an Open website link).</summary>
+    private static string FillIn(ActionStep step, RunContext context)
     {
         var p = step.Parameter;
-        if (!p.Contains(ActionCatalog.HeardPlaceholder, StringComparison.OrdinalIgnoreCase)) return p;
-        // Inside a link (e.g. "youtube.com/results?search_query={heard}") the words must be encoded.
-        var insideLink = step.Type == ActionType.OpenUrl && !p.Trim().Equals(ActionCatalog.HeardPlaceholder, StringComparison.OrdinalIgnoreCase);
-        var value = insideLink ? Uri.EscapeDataString(heard) : heard;
-        return p.Replace(ActionCatalog.HeardPlaceholder, value, StringComparison.OrdinalIgnoreCase);
+        // Inside a link (e.g. "youtube.com/results?search_query={heard}") the words must be encoded;
+        // a parameter that is nothing but a placeholder is a whole link, so it's left as is.
+        var insideLink = step.Type == ActionType.OpenUrl && !Placeholder.Match(p.Trim()).Value.Equals(p.Trim(), StringComparison.Ordinal);
+        return Fill(p, context, insideLink ? Uri.EscapeDataString : null);
+    }
+
+    /// <summary>
+    /// Replaces the placeholders a parameter can use: {heard} (Listen for words), {result} (last web
+    /// request / script / Ask Claude), {clipboard}, {date} (2026-01-31), {time} (18:05) and {app}
+    /// (the app in front, e.g. chrome). Done in one pass, so a value is never itself filled in again.
+    /// </summary>
+    private static string Fill(string template, RunContext context, Func<string, string>? encode = null)
+    {
+        if (!template.Contains('{')) return template;
+        return Placeholder.Replace(template, match =>
+        {
+            var value = match.Groups[1].Value.ToLowerInvariant() switch
+            {
+                "heard" => context.Heard,
+                "result" => context.Result,
+                "clipboard" => SystemActions.GetClipboardText(),
+                "date" => DateTime.Now.ToString("yyyy-MM-dd"),
+                "time" => DateTime.Now.ToString("HH:mm"),
+                _ => ForegroundApp.ProcessName() ?? "",
+            };
+            return encode != null ? encode(value) : value;
+        });
     }
 
     private static async Task RunStepAsync(ActionStep step, string p)
@@ -85,7 +180,16 @@ public static class ActionExecutor
             case ActionType.MicMute: SystemActions.SetMicMute(true); break;
             case ActionType.MicUnmute: SystemActions.SetMicMute(false); break;
             case ActionType.KeyCombo: SendCombo(p); break;
+            case ActionType.HoldKeys: Send(ParseCombo(p).Select(k => KeyInput(k, Extended(k))).ToArray()); break;
+            case ActionType.ReleaseKeys: Send(Enumerable.Reverse(ParseCombo(p)).Select(k => KeyInput(k, Extended(k) | KEYEVENTF_KEYUP)).ToArray()); break;
             case ActionType.TypeText: TypeText(p); break;
+            case ActionType.PasteText:
+                if (p.Length == 0) throw new ArgumentException("There's no text to paste.");
+                SystemActions.CopyText(p);
+                await Task.Delay(80); // give the clipboard a moment before the app reads it
+                SendCombo("ctrl+v");
+                break;
+            case ActionType.AppendToFile: AdvancedActions.AppendToFile(p); break;
             case ActionType.CopyText: SystemActions.CopyText(p); break;
             case ActionType.MouseClick: Click(MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP); break;
             case ActionType.MouseRightClick: Click(MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP); break;
