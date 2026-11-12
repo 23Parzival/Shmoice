@@ -12,7 +12,7 @@
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
 
     <!-- App info shown in the exe's Properties > Details and by the installer. -->
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <Product>Shmoice</Product>
     <AssemblyTitle>Shmoice</AssemblyTitle>
     <Description>Voice commands for your PC</Description>

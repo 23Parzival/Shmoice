@@ -320,15 +320,18 @@
                         <Grid>
                             <DockPanel x:Name="Editor" DataContext="{Binding SelectedItem, ElementName=CommandList}">
                                 <StackPanel DockPanel.Dock="Top">
-                                    <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" />
-                                    <TextBox x:Name="PhraseBox" Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,10" />
-                                    <!-- Profiles: limit this command to certain apps. -->
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
-                                        <TextBlock Text="Runs in" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,10,0" />
-                                        <ComboBox x:Name="ProfileCombo" Width="240" SelectedValuePath="Id" DisplayMemberPath="Name"
-                                                  SelectedValue="{Binding ProfileId, Converter={StaticResource NullGuid}}"
-                                                  ToolTip="Any app, or only while the apps of a profile are in front (set up in the Profiles tab)" />
-                                    </StackPanel>
+                                    <!-- Label on the left, profile picker on the right of the same row, to leave more height for the steps. -->
+                                    <Grid Margin="0,0,0,6">
+                                        <TextBlock Text="WHEN I SAY" Style="{StaticResource SectionLabel}" Margin="0" VerticalAlignment="Bottom" />
+                                        <!-- Profiles: limit this command to certain apps. -->
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <TextBlock Text="Runs in" VerticalAlignment="Center" Foreground="{DynamicResource MutedTextBrush}" Margin="0,0,10,0" />
+                                            <ComboBox x:Name="ProfileCombo" Width="220" SelectedValuePath="Id" DisplayMemberPath="Name"
+                                                      SelectedValue="{Binding ProfileId, Converter={StaticResource NullGuid}}"
+                                                      ToolTip="Any app, or only while the apps of a profile are in front (set up in the Profiles tab)" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBox x:Name="PhraseBox" Text="{Binding Phrase, UpdateSourceTrigger=PropertyChanged}" FontSize="18" Margin="0,0,0,14" />
                                     <TextBlock Text="DO THESE STEPS, IN ORDER" Style="{StaticResource SectionLabel}" />
                                 </StackPanel>
 
@@ -337,10 +340,9 @@
                                         <Button Content="▶  Test" Click="TestCommand_Click" Margin="0,0,6,6" />
                                         <Button Content="Save" Click="Save_Click" Style="{StaticResource AccentButton}"
                                                 Padding="20,5" FontWeight="SemiBold" Margin="0,0,0,6" />
-                                    </WrapPanel>
-                                    <!-- Quick tips for the steps whose parameter isn't obvious. -->
+                                    <!-- Quick tips for the steps whose parameter isn't obvious; sits beside Save and opens below. -->
                                     <!-- Plain text toggle: no box, no animation. -->
-                                    <ToggleButton x:Name="TipsToggle" Margin="0,6,0,0" HorizontalAlignment="Left" Cursor="Hand"
+                                    <ToggleButton x:Name="TipsToggle" Margin="16,0,0,6" VerticalAlignment="Center" Cursor="Hand"
                                                   Focusable="False">
                                         <ToggleButton.Template>
                                             <ControlTemplate TargetType="ToggleButton">
@@ -361,8 +363,9 @@
                                             </ControlTemplate>
                                         </ToggleButton.Template>
                                     </ToggleButton>
+                                    </WrapPanel>
                                     <StackPanel TextBlock.Foreground="{DynamicResource MutedTextBrush}" TextBlock.FontSize="11.5"
-                                                Margin="12,4,0,0"
+                                                Margin="0,4,0,0"
                                                 Visibility="{Binding IsChecked, ElementName=TipsToggle, Converter={StaticResource BoolToVisibility}}">
                                         <TextBlock TextWrapping="Wrap" Margin="0,0,0,3">
                                             • <Run FontWeight="SemiBold">Press keys:</Run> click the box, then press the key or
