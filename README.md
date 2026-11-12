@@ -1,5 +1,5 @@
 # Shmoice
-A voice command application that will send commands to do anything you want (for the most part). The user can create new commands either directly or by letting an AI model interpret what the command should do through user prompt.
+A voice command application that will send commands to do anything you want (for the most part). The user can create new commands either directly or by letting an AI model interpret what the command should do through user prompt. This application was made with the help of AI.
 
 Say the wake word, then a command: *"computer, next song"*. Each command is a list of steps that run in order.
 
