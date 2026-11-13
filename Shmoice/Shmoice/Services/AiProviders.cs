@@ -26,11 +26,12 @@ public record AiProvider(string Id, string Name, AiApiKind Kind, string DefaultB
 }
 
 /// <summary>Everything needed to make a request: which API, where, with what key and model.</summary>
-public record AiConnection(AiApiKind Kind, string BaseUrl, string ApiKey, string Model, string ProviderName);
+/// <param name="IsOllama">Ollama: talked to through its own API, which (unlike its OpenAI-style one) lets us give the model more room.</param>
+public record AiConnection(AiApiKind Kind, string BaseUrl, string ApiKey, string Model, string ProviderName, bool IsOllama = false);
 
 public static class AiProviders
 {
-    public const string AnthropicId = "anthropic", CustomId = "custom";
+    public const string AnthropicId = "anthropic", CustomId = "custom", OllamaId = "ollama";
 
     public static IReadOnlyList<AiProvider> All { get; } =
     [
@@ -51,7 +52,7 @@ public static class AiProviders
             "Needs an API key from platform.deepseek.com.", []),
         new("xai", "xAI (Grok)", AiApiKind.OpenAiCompatible, "https://api.x.ai/v1", "", false,
             "Needs an API key from console.x.ai.", []),
-        new("ollama", "Ollama (on this PC)", AiApiKind.OpenAiCompatible, "http://localhost:11434/v1", "", true,
+        new(OllamaId, "Ollama (on this PC)", AiApiKind.OpenAiCompatible, "http://localhost:11434/v1", "", true,
             "Runs models on your own PC: free, private, no key. Ollama must be running, with a model downloaded (e.g. “ollama pull llama3.2”).", []),
         new("lmstudio", "LM Studio (on this PC)", AiApiKind.OpenAiCompatible, "http://localhost:1234/v1", "", true,
             "Runs models on your own PC: free, private, no key. In LM Studio, load a model and start its local server.", []),
@@ -100,7 +101,7 @@ public static class AiProviders
             throw new InvalidOperationException($"{provider.Name} needs an API key." + where);
         if (needModel && model.Length == 0)
             throw new InvalidOperationException($"Choose which {provider.Name} model to use." + where);
-        return new AiConnection(provider.Kind, baseUrl, key, model, provider.Name);
+        return new AiConnection(provider.Kind, baseUrl, key, model, provider.Name, IsOllama: provider.Id == OllamaId);
     }
 
     /// <summary>

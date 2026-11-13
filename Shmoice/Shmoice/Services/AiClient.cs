@@ -29,9 +29,76 @@ public static class AiClient
     /// <param name="quick">A short, fast answer is wanted (spoken replies) rather than careful work.</param>
     public static Task<string> CompleteAsync(AiConnection ai, string system, string user,
         Dictionary<string, JsonElement>? jsonSchema = null, bool quick = false, CancellationToken ct = default) =>
-        ai.Kind == AiApiKind.Anthropic
-            ? AnthropicAsync(ai, system, user, jsonSchema, quick, ct)
-            : OpenAiCompatibleAsync(ai, system, user, jsonSchema, ct);
+        ai.Kind == AiApiKind.Anthropic ? AnthropicAsync(ai, system, user, jsonSchema, quick, ct)
+        : ai.IsOllama ? OllamaAsync(ai, system, user, jsonSchema, quick, ct)
+        : OpenAiCompatibleAsync(ai, system, user, jsonSchema, ct);
+
+    // ---- Ollama -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Room (in tokens) for the instructions, the model's thinking and its answer. Ollama loads models
+    /// with only 4096 by default, which Shmoice's instructions plus a thinking model's reasoning
+    /// overflow ("ran out of room"), and its OpenAI-style API has no way to ask for more.
+    /// </summary>
+    private const int OllamaContext = 16384;
+
+    private static async Task<string> OllamaAsync(AiConnection ai, string system, string user,
+        Dictionary<string, JsonElement>? jsonSchema, bool quick, CancellationToken ct)
+    {
+        // Settings hold the OpenAI-style address (…/v1); Ollama's own API sits beside it at /api.
+        var root = ai.BaseUrl.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ? ai.BaseUrl[..^3] : ai.BaseUrl;
+        var native = ai with { BaseUrl = root };
+
+        Dictionary<string, object> Body(bool withExtras)
+        {
+            var body = new Dictionary<string, object>
+            {
+                ["model"] = ai.Model,
+                ["stream"] = false,
+                ["messages"] = new object[]
+                {
+                    new { role = "system", content = system },
+                    new { role = "user", content = user },
+                },
+                ["options"] = new { num_ctx = OllamaContext },
+            };
+            if (withExtras)
+            {
+                // Spoken answers should be quick, so skip thinking for those (thinking models only).
+                if (quick) body["think"] = false;
+                if (jsonSchema != null) body["format"] = jsonSchema;
+            }
+            return body;
+        }
+
+        var (status, text) = await PostAsync(native, "/api/chat", Body(withExtras: true), ct);
+        if (status == HttpStatusCode.BadRequest)
+            // Models that can't think or can't follow a JSON shape reject those; ask plainly instead
+            // (the prompt still asks for JSON).
+            (status, text) = await PostAsync(native, "/api/chat", Body(withExtras: false), ct);
+        if (status == HttpStatusCode.NotFound && !text.Contains("model", StringComparison.OrdinalIgnoreCase))
+            // Not actually Ollama at that address (or a proxy that only passes /v1): use the OpenAI-style API.
+            return await OpenAiCompatibleAsync(ai, system, user, jsonSchema, ct);
+        if ((int)status is < 200 or >= 300) throw new InvalidOperationException(DescribeError(ai, status, text));
+
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            var reply = StripThinking(doc.RootElement.GetProperty("message").GetProperty("content").GetString() ?? "");
+            if (reply.Length == 0)
+            {
+                var cutOff = doc.RootElement.TryGetProperty("done_reason", out var reason) && reason.GetString() == "length";
+                throw new InvalidOperationException(cutOff
+                    ? "The model ran out of room before answering (it spent too long thinking). Try again, or a simpler request."
+                    : "The model sent back an empty answer. Try again or pick a different model.");
+            }
+            return reply;
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException)
+        {
+            throw new InvalidOperationException("Ollama answered in a way Shmoice doesn't understand. Is the address right?");
+        }
+    }
 
     // ---- Anthropic --------------------------------------------------------------------
 

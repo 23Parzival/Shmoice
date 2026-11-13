@@ -306,8 +306,16 @@
                             <TextBlock Text="Model" VerticalAlignment="Top" Margin="0,7,0,0" />
                             <StackPanel Grid.Column="1">
                                 <StackPanel Orientation="Horizontal">
-                                    <ComboBox x:Name="AiModel" Width="340" IsEditable="True" IsTextSearchEnabled="False"
-                                              LostFocus="AiModel_Changed" SelectionChanged="AiModel_Changed" DropDownClosed="AiModel_Changed" />
+                                    <!-- A text box plus a ▾ menu rather than an editable ComboBox: the theme's editable
+                                         ComboBox closes its list when the mouse moves over it, so picking didn't work. -->
+                                    <Grid Width="340">
+                                        <TextBox x:Name="AiModel" Padding="10,6,36,6" VerticalContentAlignment="Center"
+                                                 LostFocus="AiModel_LostFocus" KeyDown="AiModel_KeyDown" />
+                                        <Button x:Name="ModelListButton" HorizontalAlignment="Right" Margin="0,3,3,3" Width="30" Padding="0"
+                                                Background="Transparent" BorderThickness="0" Click="ModelList_Click"
+                                                FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="11" Content="&#xE70D;"
+                                                ToolTip="Pick a model" Focusable="False" />
+                                    </Grid>
                                     <Button x:Name="FindModelsButton" Content="Find models" Click="FindModels_Click" Padding="12,4" Margin="8,0,0,0"
                                             ToolTip="Ask the service which models it has" />
                                 </StackPanel>

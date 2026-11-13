@@ -65,7 +65,8 @@ public partial class SettingsTab : UserControl
                 : "Filled in for you. Change it only if yours is somewhere else, e.g. on another PC.";
 
             FindModelsButton.Visibility = openAi ? Visibility.Visible : Visibility.Collapsed;
-            AiModel.ItemsSource = provider.SuggestedModels;
+            _models = provider.SuggestedModels;
+            ModelListButton.Visibility = _models.Count > 0 || openAi ? Visibility.Visible : Visibility.Collapsed;
             AiModel.Text = config.Model;
             AiModelHint.Text = provider.DefaultModel.Length > 0
                 ? $"Leave empty to use {provider.DefaultModel}."
@@ -127,15 +128,59 @@ public partial class SettingsTab : UserControl
         AiChanged();
     }
 
-    private void AiModel_Changed(object sender, EventArgs e)
+    /// <summary>Models offered in the ▾ menu: the service's suggestions, or what Find models found.</summary>
+    private IReadOnlyList<string> _models = [];
+
+    private void AiModel_LostFocus(object sender, RoutedEventArgs e) => SaveModel();
+
+    private void AiModel_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) SaveModel();
+    }
+
+    /// <summary>Saves the model in the box (typed or picked).</summary>
+    private void SaveModel()
     {
         if (_updatingAi || CurrentConfig is not { } config) return;
-        // Picking from the list updates Text a moment after SelectionChanged, so prefer the picked item.
-        var model = (e is SelectionChangedEventArgs && AiModel.SelectedItem is string picked ? picked : AiModel.Text).Trim();
-        if (e is SelectionChangedEventArgs s) s.Handled = true;
+        var model = AiModel.Text.Trim();
         if (model == config.Model) return;
         config.Model = model;
         AiChanged();
+    }
+
+    /// <summary>▾ next to the model: a menu of models to pick from (asks the service first if there's no list yet).</summary>
+    private void ModelList_Click(object sender, RoutedEventArgs e)
+    {
+        if (_models.Count == 0)
+        {
+            if (FindModelsButton.Visibility == Visibility.Visible) FindModels_Click(sender, e);
+            else AiModelHint.Text = "No suggestions for this service. Type the model's name.";
+            return;
+        }
+        ShowModelMenu();
+    }
+
+    private void ShowModelMenu()
+    {
+        var menu = new ContextMenu
+        {
+            PlacementTarget = AiModel,
+            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            MinWidth = AiModel.ActualWidth,
+        };
+        var current = AiModel.Text.Trim();
+        foreach (var name in _models)
+        {
+            var item = new MenuItem { Header = name, IsCheckable = false, FontWeight = name == current ? FontWeights.SemiBold : FontWeights.Normal };
+            item.Click += (_, _) =>
+            {
+                AiModel.Text = name;
+                SaveModel();
+                AiModelHint.Text = $"Using {name}.";
+            };
+            menu.Items.Add(item);
+        }
+        menu.IsOpen = true;
     }
 
     private async void FindModels_Click(object sender, RoutedEventArgs e)
@@ -151,13 +196,9 @@ public partial class SettingsTab : UserControl
                 AiModelHint.Text = "The service has no models yet. Download or load one first, then try again.";
                 return;
             }
-            var current = AiModel.Text;
-            _updatingAi = true;
-            try { AiModel.ItemsSource = models; AiModel.Text = current; }
-            finally { _updatingAi = false; }
-            AiModelHint.Text = models.Count == 1 ? "Found 1 model. Open the list to pick it." : $"Found {models.Count} models. Open the list to pick one.";
-            AiModel.Focus();
-            AiModel.IsDropDownOpen = true;
+            _models = models;
+            AiModelHint.Text = models.Count == 1 ? "Found 1 model. Pick it from the list." : $"Found {models.Count} models. Pick one from the list.";
+            ShowModelMenu();
         }
         catch (Exception ex)
         {
@@ -181,7 +222,7 @@ public partial class SettingsTab : UserControl
     {
         if (Host == null) return;
         // Pick up a model or address still being typed.
-        AiModel_Changed(AiModel, EventArgs.Empty);
+        SaveModel();
         AiConnection ai;
         try { ai = AiProviders.Connect(Host.Data.Settings); }
         catch (Exception ex) { AiTestStatus.Text = ex.Message; return; }
